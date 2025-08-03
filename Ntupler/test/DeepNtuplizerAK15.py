@@ -23,7 +23,7 @@ options.outputFile = 'output.root'
 # options.inputFiles = '/store/cmst3/group/vhcc/sfTuples/BulkGravitonToHHTo4Z_MX-600to6000_MH-15to250_JHUVariableZMass2DMesh/20UL17MiniAODv2/part2/miniv2_15822201-2585.root' ## HZZ 2dmesh
 # options.inputFiles = '/store/mc/RunIISummer20UL17MiniAODv2/BulkGravToZZToZhadZhad_narrow_M-1000_TuneCP5_13TeV-madgraph-pythia/MINIAODSIM/106X_mc2017_realistic_v9-v2/110000/DABA0ABE-8F97-9747-9A7A-4E31435442E1.root' ## Zqq inference
 # options.inputFiles = '/store/mc/RunIISummer20UL17MiniAODv2/BulkGravToWWToWhadWhad_narrow_M-1000_TuneCP5_13TeV-madgraph-pythia/MINIAODSIM/106X_mc2017_realistic_v9-v2/260000/F1F668E3-CB4A-ED4E-9493-3485628D5059.root'  ## Wqq inference
-options.inputFiles = '/store/mc/RunIISummer20UL18MiniAODv2/WJetsToLNu_Pt-600ToInf_MatchEWPDG20_TuneCP5_13TeV-amcatnloFXFX-pythia8/MINIAODSIM/106X_upgrade2018_realistic_v16_L1v1-v1/270000/5CF104E5-9BCB-5640-A3DF-B8272F941913.root' ## official WJets
+options.inputFiles = '/store/mc/RunIISummer20UL18MiniAODv2/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/PUForMUOVal_106X_upgrade2018_realistic_v16_L1v1_ext1-v2/40000/D04DB175-7F36-BD40-9C5A-EAE95C4E0239.root' ## official WJets
 
 options.maxEvents = -1
 
