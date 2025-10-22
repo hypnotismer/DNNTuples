@@ -126,26 +126,6 @@ void printGenInfoHeader() {
       << left << "  " << setw(10) << "Mothers" << " " << setw(30) << "Daughters" << endl;
 }
 
-void printGenParticleInfo(const reco::GenParticle* genParticle, const int idx) {
-  using namespace std;
-  cout  << right << setw(3) << genParticle->status();
-  cout  << right << setw(3) << idx << " " << setw(10) << genParticle->pdgId() << "  ";
-  cout  << right << "  " << setw(3) << genParticle->charge() << "  " << TString::Format("%10.3g", genParticle->mass() < 1e-5 ? 0 : genParticle->mass());
-  cout  << left << setw(50) << TString::Format("  (E=%6.4g pT=%6.4g eta=%7.3g phi=%7.3g)", genParticle->energy(), genParticle->pt(), genParticle->eta(), genParticle->phi());
-
-  TString                     mothers;
-  for (unsigned int iMom = 0; iMom < genParticle->numberOfMothers(); ++iMom) {
-    if (mothers.Length())     mothers        += ",";
-    mothers   += genParticle->motherRef(iMom).key();
-  }
-  cout << "  " << setw(10) << mothers;
-  TString                     daughters;
-  for (unsigned int iDau = 0; iDau < genParticle->numberOfDaughters(); ++iDau) {
-    if (daughters.Length())   daughters      += ",";
-    daughters += genParticle->daughterRef(iDau).key();
-  }
-  cout << " " << setw(30) << daughters << endl;
-}
 
 
 // ------------ method called for each event  ------------
@@ -239,13 +219,9 @@ void DeepNtuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
   // Build V boson from GEN level particles
   std::vector<const reco::GenParticle*> leptonicWbosons;
   
-  // printf("event begin \n");
-  bool hasWboson = false;
   for (const auto& genParticle : *genParticles) {
     // Look for W bosons (PDG ID = ±24)
-    if (std::abs(genParticle.pdgId()) == 24 && genParticle.isLastCopy() == true) {
-      hasWboson = true;
-      // printf("found W boson with status 22 \n");
+    if (std::abs(genParticle.pdgId()) == 24 && genParticle.status() == 62) {
       bool isLeptonicDecay = false;
       reco::Candidate::LorentzVector lepP4(0,0,0,0);
       
@@ -266,13 +242,6 @@ void DeepNtuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
       if (isLeptonicDecay) {
         leptonicWbosons.push_back(&genParticle);
       }
-    }
-  }
-
-  if (!hasWboson) {
-    printGenInfoHeader();
-    for (unsigned ipart = 0; ipart<genParticles->size(); ++ipart){
-      printGenParticleInfo(&(genParticles->at(ipart)), ipart);
     }
   }
 
