@@ -35,6 +35,10 @@ options.register('inputDataset',
                  "Input dataset")
 options.register('isTrainSample', True, VarParsing.multiplicity.singleton,
                  VarParsing.varType.bool, "if the sample is used for training")
+options.register('isTTBarSample', False, VarParsing.multiplicity.singleton,
+                 VarParsing.varType.bool, "if the sample is ttbar")
+options.register('isQCDSample', False, VarParsing.multiplicity.singleton,
+                 VarParsing.varType.bool, "if the sample is QCD")
 # special output configs
 options.register('addMET', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool, "add MET vars to output file")
 options.register('addLowLevel', True, VarParsing.multiplicity.singleton, VarParsing.varType.bool, "add low-level vars to output file")
@@ -45,9 +49,6 @@ options.register('adhocFixMode', 0, VarParsing.multiplicity.singleton, VarParsin
 options.parseArguments()
 
 # test command: cmsRun DeepNtuplizerAK8.py maxEvents=100 isTrainSample=1
-
-# force to keep all events for fine-tuning use case
-options.keepAllEvents = True
 
 globalTagMap = {
     'auto': 'auto:phase1_2018_realistic',
@@ -247,8 +248,8 @@ process.deepntuplizer.genJetsNoNuSoftDropMatch = 'ak15GenJetsNoNuSoftDropMatch'
 
 # determine sample type with inputFiles name
 _inputfile = options.inputFiles[0]
-process.deepntuplizer.isQCDSample = '/QCD_' in _inputfile
-process.deepntuplizer.isTTBarSample = 'tott' in _inputfile.lower() or 'ttbar' in _inputfile.lower()
+process.deepntuplizer.isQCDSample = options.isQCDSample
+process.deepntuplizer.isTTBarSample = options.isTTBarSample
 process.deepntuplizer.isHVV2DVarMassSample = '2DMesh' in _inputfile
 process.deepntuplizer.isPythia = 'pythia' in _inputfile.lower()
 process.deepntuplizer.isHerwig = 'herwig' in _inputfile.lower()
