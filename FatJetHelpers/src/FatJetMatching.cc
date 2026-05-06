@@ -7,6 +7,7 @@
 
 #include "DeepNTuples/FatJetHelpers/interface/FatJetMatching.h"
 
+#include <algorithm>
 #include <unordered_set>
 #include "TString.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
@@ -565,9 +566,31 @@ void FatJetMatching::higgs_label(const pat::Jet* jet, const reco::GenParticle *p
   enum HDecay {h_2p, h_tautau, h_qtau, h_WW, h_ZZ, h_WHorZH, h_null};
   HDecay hdecay = h_null;
   auto hdaus = getDaughters(higgs);
-  if (higgs->numberOfDaughters() >= 3) {
-    // e.g., h->Vqq or h->qqqq
-    throw std::runtime_error("[FatJetMatching::higgs_label] H decays to 3/4 objects: not implemented");
+  if (hdaus.size() < 2) {
+    // not implemented: can be leptonic decays
+    return;
+  }
+  if (hdaus.size() >= 3) {
+    // dedicated category for xggg samples: only match direct H -> ggg decays
+    if (hdaus.size() == 3) {
+      std::vector<std::pair<double, const reco::GenParticle*>> gluons;
+      for (const auto *dau : hdaus) {
+        if (std::abs(dau->pdgId()) != ParticleID::p_g) {
+          return;
+        }
+        gluons.emplace_back(reco::deltaR(jet->p4(), dau->p4()), dau);
+      }
+      std::sort(gluons.begin(), gluons.end(),
+                [](const auto& a, const auto& b) { return a.first < b.first; });
+      for (const auto& gluon : gluons) {
+        if (gluon.first >= distR) {
+          return;
+        }
+        getResult().particles.push_back(gluon.second);
+      }
+      getResult().label = "H_ggg";
+    }
+    return;
   }else {
     auto pdgid1 = std::abs(hdaus.at(0)->pdgId()), pdgid2 = std::abs(hdaus.at(1)->pdgId());
     if (pdgid1 == ParticleID::p_Wplus && pdgid2 == ParticleID::p_Wplus) {
