@@ -34,10 +34,6 @@ options.register('inputDataset',
                  "Input dataset")
 options.register('isTrainSample', True, VarParsing.multiplicity.singleton,
                  VarParsing.varType.bool, "if the sample is used for training")
-options.register('isTTBarSample', False, VarParsing.multiplicity.singleton,
-                 VarParsing.varType.bool, "if the sample is ttbar")
-options.register('isQCDSample', False, VarParsing.multiplicity.singleton,
-                 VarParsing.varType.bool, "if the sample is QCD")
 options.register('keepAllEvents', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool, "keep all events for QCD and ttbar when creating inference dataset (isTrainSample=False)")
 
 options.parseArguments()

@@ -45,7 +45,7 @@ void FatJetMatching::flavorLabel(const pat::Jet* jet,
       if (getResult().label != "Invalid"){
         return;
       }
-    }else if (pdgid == ParticleID::p_H0 || pdgid == ParticleID::p_Hplus || pdgid == ParticleID::p_Hbsm || pdgid == ParticleID::p_LQbsm || (!found_reslike_higgs && pdgid == ParticleID::p_h0)){
+    }else if (pdgid == ParticleID::p_H0 || pdgid == ParticleID::p_Hplus || pdgid == ParticleID::p_Hbsm || pdgid == ParticleID::p_LQbsm || pdgid == ParticleID::p_Zprime0 || (!found_reslike_higgs && pdgid == ParticleID::p_h0)){
       found_higgs = true;
       if (pdgid != ParticleID::p_h0){
         found_reslike_higgs = true;
