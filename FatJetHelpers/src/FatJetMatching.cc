@@ -582,13 +582,22 @@ void FatJetMatching::higgs_label(const pat::Jet* jet, const reco::GenParticle *p
       }
       std::sort(gluons.begin(), gluons.end(),
                 [](const auto& a, const auto& b) { return a.first < b.first; });
+      int nMatched = 0;
       for (const auto& gluon : gluons) {
-        if (gluon.first >= distR) {
-          return;
+        if (gluon.first < distR) {
+          getResult().particles.push_back(gluon.second);
+          ++nMatched;
         }
-        getResult().particles.push_back(gluon.second);
       }
-      getResult().label = "H_ggg";
+      if (nMatched == 3) {
+        getResult().label = "H_ggg";
+      } else if (nMatched == 2) {
+        getResult().label = "H_ggg_gg";
+      } else if (nMatched == 1) {
+        getResult().label = "H_ggg_g";
+      } else {
+        getResult().label = "H_ggg_0";
+      }
     }
     return;
   }else {
