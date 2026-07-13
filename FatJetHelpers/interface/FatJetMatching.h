@@ -68,6 +68,8 @@ private:
   void higgs_WW_label(const pat::Jet* jet, std::vector<const reco::GenParticle*>& hVV_daughters, double distR);
   void higgs_ZZ_label(const pat::Jet* jet, std::vector<const reco::GenParticle*>& hVV_daughters, double distR);
   void higgs_WHorZH_label(const pat::Jet* jet, std::vector<const reco::GenParticle*>& hVV_daughters, double distR);
+  // After all resonances are tried: assign best partial/zero H->ggg match if any.
+  void assign_ggg_leak_label(const pat::Jet *jet, const reco::GenParticleCollection& genParticles, double distR);
   void qcd_label(const pat::Jet *jet, const reco::GenParticleCollection& genParticles, double distR);
 
 

@@ -84,7 +84,15 @@ void FatJetMatching::flavorLabel(const pat::Jet* jet,
   if (genParticles.size() != processed_.size())
     throw std::logic_error("[FatJetMatching::flavor] Not all genParticles are processed!");
 
+  // No full resonance match: if the event has H->ggg, assign the best
+  // partial/zero-match label across all such Higgses (keeps H_ggg_0/g/gg
+  // without letting the first H short-circuit a better match to another H).
   clearResult();
+  assign_ggg_leak_label(jet, genParticles, distR);
+  if (getResult().label != "Invalid"){
+    return;
+  }
+
   qcd_label(jet, genParticles, distR);
 
 }
@@ -589,14 +597,10 @@ void FatJetMatching::higgs_label(const pat::Jet* jet, const reco::GenParticle *p
           ++nMatched;
         }
       }
+      // Only accept fully contained H->ggg here so other Higgses can still be
+      // tried. Partial/zero matches are assigned later by assign_ggg_leak_label().
       if (nMatched == 3) {
         getResult().label = "H_ggg";
-      } else if (nMatched == 2) {
-        getResult().label = "H_ggg_gg";
-      } else if (nMatched == 1) {
-        getResult().label = "H_ggg_g";
-      } else {
-        getResult().label = "H_ggg_0";
       }
     }
     return;
@@ -1352,6 +1356,74 @@ void FatJetMatching::higgs_WHorZH_label(const pat::Jet* jet, std::vector<const r
     }
   }
   throw std::logic_error("[FatJetMatching::higgs_WHorZH_label] Unmatched label: " + matched_parts_str);
+}
+
+void FatJetMatching::assign_ggg_leak_label(const pat::Jet* jet,
+    const reco::GenParticleCollection& genParticles, double distR)
+{
+  // Pick the H->ggg with the largest number of gluons inside distR.
+  // Called only when no full resonance match (incl. H_ggg) was found.
+  int bestMatched = -1;
+  const reco::GenParticle* bestHiggs = nullptr;
+  std::vector<const reco::GenParticle*> bestGluons;
+  std::unordered_set<const reco::GenParticle*> seenHiggs;
+
+  for (const auto &gp : genParticles){
+    auto pdgid = std::abs(gp.pdgId());
+    if (!(pdgid == ParticleID::p_H0 || pdgid == ParticleID::p_Hplus || pdgid == ParticleID::p_Hbsm ||
+          pdgid == ParticleID::p_LQbsm || pdgid == ParticleID::p_Zprime0 || pdgid == ParticleID::p_h0)) {
+      continue;
+    }
+
+    auto higgs = getFinal(&gp);
+    if (!seenHiggs.insert(higgs).second) continue;
+
+    auto hdaus = getDaughters(higgs);
+    if (hdaus.size() != 3) continue;
+
+    std::vector<std::pair<double, const reco::GenParticle*>> gluons;
+    bool allGluons = true;
+    for (const auto *dau : hdaus) {
+      if (std::abs(dau->pdgId()) != ParticleID::p_g) {
+        allGluons = false;
+        break;
+      }
+      gluons.emplace_back(reco::deltaR(jet->p4(), dau->p4()), dau);
+    }
+    if (!allGluons) continue;
+
+    int nMatched = 0;
+    std::vector<const reco::GenParticle*> matched;
+    for (const auto& gluon : gluons) {
+      if (gluon.first < distR) {
+        matched.push_back(gluon.second);
+        ++nMatched;
+      }
+    }
+
+    if (nMatched > bestMatched) {
+      bestMatched = nMatched;
+      bestHiggs = higgs;
+      bestGluons = matched;
+    }
+  }
+
+  if (bestMatched < 0 || !bestHiggs) {
+    // No H->ggg in this event; leave Invalid for QCD labeling.
+    return;
+  }
+
+  getResult().resParticles.push_back(bestHiggs);
+  getResult().particles = bestGluons;
+  if (bestMatched >= 3) {
+    getResult().label = "H_ggg";
+  } else if (bestMatched == 2) {
+    getResult().label = "H_ggg_gg";
+  } else if (bestMatched == 1) {
+    getResult().label = "H_ggg_g";
+  } else {
+    getResult().label = "H_ggg_0";
+  }
 }
 
 void FatJetMatching::qcd_label(const pat::Jet* jet, const reco::GenParticleCollection& genParticles, double distR)
