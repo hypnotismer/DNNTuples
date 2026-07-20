@@ -6,13 +6,28 @@
  */
 
 #include "DeepNTuples/Ntupler/interface/FatJetInfoFiller.h"
+#include "FWCore/Framework/interface/LuminosityBlock.h"
 #include <string>
 #include <algorithm>
+#include <regex>
 
 namespace deepntuples {
 
+float FatJetInfoFiller::parseMassTagFromConfigDescription(const std::string& desc, const std::string& tag) {
+  // e.g. Spin0ToTT_..._MX811_WX8_MH20_MZ80.0  or  BulkGravitonToHH_MX600_MH125
+  // tag = "MH" or "MX"
+  const std::regex re("_" + tag + "([0-9]+(?:\\.[0-9]+)?)");
+  std::smatch match;
+  if (std::regex_search(desc, match, re)) {
+    return std::stof(match[1].str());
+  }
+  return 0.f;
+}
+
 void FatJetInfoFiller::readConfig(const edm::ParameterSet& iConfig, edm::ConsumesCollector&& cc) {
   genParticlesToken_ = cc.consumes<reco::GenParticleCollection>(iConfig.getParameter<edm::InputTag>("genParticles"));
+  genLumiHeaderToken_ = cc.mayConsume<GenLumiInfoHeader, edm::InLumi>(
+      iConfig.getParameter<edm::InputTag>("genLumiInfoHeader"));
   fjTagInfoName = iConfig.getParameter<std::string>("fjTagInfoName");
   useReclusteredJets_ = iConfig.getParameter<bool>("useReclusteredJets");
   isQCDSample_ = iConfig.getUntrackedParameter<bool>("isQCDSample", false);
@@ -30,6 +45,21 @@ void FatJetInfoFiller::readConfig(const edm::ParameterSet& iConfig, edm::Consume
 
 void FatJetInfoFiller::readEvent(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
   iEvent.getByToken(genParticlesToken_, genParticlesHandle);
+
+  genPoleMass_ = 0.f;
+  genResMass_ = 0.f;
+  edm::Handle<GenLumiInfoHeader> genLumiHeader;
+  iEvent.getLuminosityBlock().getByToken(genLumiHeaderToken_, genLumiHeader);
+  if (genLumiHeader.isValid()) {
+    const std::string& desc = genLumiHeader->configDescription();
+    genPoleMass_ = parseMassTagFromConfigDescription(desc, "MH");
+    genResMass_ = parseMassTagFromConfigDescription(desc, "MX");
+    if (debug_) {
+      std::cout << "[FatJetInfoFiller] ConfigDescription='" << desc
+                << "' -> fj_gen_pole_mass=" << genPoleMass_
+                << " fj_gen_res_mass=" << genResMass_ << std::endl;
+    }
+  }
 }
 
 void FatJetInfoFiller::book() {
@@ -99,6 +129,8 @@ void FatJetInfoFiller::book() {
   data.add<float>("fj_gen_eta", 0);
   data.add<float>("fj_gen_phi", 0);
   data.add<float>("fj_gen_mass", 0);
+  data.add<float>("fj_gen_pole_mass", 0);  // discrete daughter mass (_MH) from GenLumiInfoHeader ConfigDescription
+  data.add<float>("fj_gen_res_mass", 0);   // discrete resonance mass (_MX; Spin0 / graviton)
   data.add<float>("fj_gen_pid", 0);
   data.add<float>("fj_gen_deltaR", 999);
   data.add<float>("fj_gendau1_pt", 0);
@@ -320,6 +352,8 @@ bool FatJetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper&
   data.fill<float>("fj_gen_eta", resparts_size > 0 ? resparts[0]->eta() : -999);
   data.fill<float>("fj_gen_phi", resparts_size > 0 ? resparts[0]->phi() : -999);
   data.fill<float>("fj_gen_mass", resparts_size > 0 ? resparts[0]->mass() : 0);
+  data.fill<float>("fj_gen_pole_mass", genPoleMass_);
+  data.fill<float>("fj_gen_res_mass", genResMass_);
   data.fill<float>("fj_gen_pid", resparts_size > 0 ? resparts[0]->pdgId() : 0);
   data.fill<float>("fj_gen_deltaR", resparts_size > 0 ? reco::deltaR(jet, resparts[0]->p4()) : 999);
   data.fill<float>("fj_gendau1_pt", resparts_size > 1 ? resparts[1]->pt() : -999);

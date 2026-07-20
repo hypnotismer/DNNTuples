@@ -10,6 +10,7 @@
 
 #include "DataFormats/BTauReco/interface/ShallowTagInfo.h"
 #include "DataFormats/BTauReco/interface/BoostedDoubleSVTagInfo.h"
+#include "SimDataFormats/GeneratorProducts/interface/GenLumiInfoHeader.h"
 
 #include "DeepNTuples/NtupleCommons/interface/NtupleBase.h"
 #include "DeepNTuples/FatJetHelpers/interface/FatJetMatching.h"
@@ -57,6 +58,12 @@ private:
 
   edm::EDGetTokenT<reco::GenParticleCollection> genParticlesToken_;
   edm::Handle<reco::GenParticleCollection> genParticlesHandle;
+
+  edm::EDGetTokenT<GenLumiInfoHeader> genLumiHeaderToken_;
+  float genPoleMass_ = 0.f;  // discrete daughter mass from ConfigDescription (_MH...)
+  float genResMass_ = 0.f;   // discrete resonance mass from ConfigDescription (_MX...; Spin0 / graviton)
+
+  static float parseMassTagFromConfigDescription(const std::string& desc, const std::string& tag);
 
   std::vector<std::string> labelTop_ = {
     "bWcs", "bWqq", "bWc", "bWs", "bWq", "bWev", "bWmv", "bWtauev", "bWtaumv", "bWtauhv",
