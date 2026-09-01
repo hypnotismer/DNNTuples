@@ -62,14 +62,9 @@ public:
   const reco::GenJet* genjetNoNu() const { return genjetNoNu_; }
   const reco::GenJet* genjetNoNuSoftDrop() const { return genjetNoNuSoftDrop_; }
 
-  std::pair<double, double> getCorrectedPuppiSoftDropMass(const std::vector<const pat::Jet*> &puppisubjets) const; // tmp
-
-
 private:
   void initializeConstituents(const edm::Handle<reco::CandidateView> &pfcands);
 
-
-private:
   // data members
   const pat::Jet *jet_ = nullptr;
   const reco::GenJet *genjetWithNu_ = nullptr;

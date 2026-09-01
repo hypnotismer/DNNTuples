@@ -164,7 +164,6 @@ void FatJetInfoFiller::book() {
   data.add<float>("fj_sdmass_fromsubjets", 0);
   data.add<float>("fj_rho", 0);
   data.add<float>("fj_uncorrsdmass", 0);
-  data.add<float>("fj_corrsdmass", 0);
 
   // subjets: soft drop gives up to 2 subjets
   data.add<float>("fj_n_sdsubjets", 0);
@@ -380,15 +379,19 @@ bool FatJetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper&
   auto msd_uncorr = jet.userFloat(name +"PFJetsPuppiSoftDropMass");
   data.fill<float>("fj_sdmass", msd_uncorr);
   data.fill<float>("fj_sdmass_fromsubjets", jet.groomedMass());
-  data.fill<float>("fj_rho", 2 * std::log(std::max(jet.groomedMass(), 0.01) / jet_helper.jet().pt())); // use corrected pt
+  data.fill<float>("fj_rho", 2 * std::log(std::max(jet.groomedMass(), 0.01) / jet.pt()));
 
   // subjets: soft drop gives up to 2 subjets
   const auto& subjets = jet_helper.getSubJets();
 
   data.fill<float>("fj_n_sdsubjets", subjets.size());
-  auto sdcorr = jet_helper.getCorrectedPuppiSoftDropMass(subjets);
-  data.fill<float>("fj_uncorrsdmass", sdcorr.first);
-  data.fill<float>("fj_corrsdmass", sdcorr.second);
+  float sdpuppimass = 0;
+  if (subjets.size() == 1) {
+    sdpuppimass = JetHelper::rawP4(*subjets[0]).mass();
+  } else if (subjets.size() >= 2) {
+    sdpuppimass = (JetHelper::rawP4(*subjets[0]) + JetHelper::rawP4(*subjets[1])).mass();
+  }
+  data.fill<float>("fj_uncorrsdmass", sdpuppimass);
 
   if (subjets.size() > 0){
     const auto &sj1 = subjets.at(0);

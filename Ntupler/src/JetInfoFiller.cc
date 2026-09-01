@@ -46,7 +46,7 @@ void JetInfoFiller::readEvent(const edm::Event& iEvent, const edm::EventSetup& i
 
 }
 
-bool JetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper& jet_helper) {
+bool JetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper&) {
   // pv selection
   if (vertices->empty()) return false;
 
@@ -85,7 +85,9 @@ bool JetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper& je
   // truth labels
   float gen_pt = jet.genJet() ? jet.genJet()->pt() : 0;
   data.fill<float>("gen_pt", gen_pt);
-  data.fill<float>("Delta_gen_pt", gen_pt - JetHelper::rawP4(jet).pt());
+  // fill() already receives jetUncorr, so jet.pt() is the raw pT
+  const float raw_pt = jet.pt();
+  data.fill<float>("Delta_gen_pt", gen_pt - raw_pt);
 
   auto flavor = flavorDef.jet_flavour(jet);
   data.fill<int>("isB", flavor==JetFlavor::B);
@@ -99,8 +101,7 @@ bool JetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper& je
   data.fill<int>("isUndefined", flavor==JetFlavor::UNDEFINED);
 
   // jet variables
-  data.fill<float>("jet_pt", JetHelper::rawP4(jet).pt());
-  data.fill<float>("jet_corr_pt", jet.pt());
+  data.fill<float>("jet_pt", raw_pt);
   data.fill<float>("jet_eta", jet.eta());
   data.fill<float>("jet_phi", jet.phi());
 
@@ -160,7 +161,6 @@ void JetInfoFiller::book() {
 
   // jet variables
   data.add<float>("jet_pt", 0);
-  data.add<float>("jet_corr_pt", 0);
   data.add<float>("jet_eta", 0);
   data.add<float>("jet_phi", 0);
 

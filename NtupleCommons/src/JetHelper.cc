@@ -70,23 +70,4 @@ void JetHelper::initializeConstituents(const edm::Handle<reco::CandidateView> &p
 
 }
 
-std::pair<double, double> JetHelper::getCorrectedPuppiSoftDropMass(const std::vector<const pat::Jet*> &puppisubjets) const {
-  double sdpuppimass = 0;
-  if (puppisubjets.size()==1){
-    sdpuppimass = JetHelper::rawP4(*puppisubjets[0]).mass();
-  }else if (puppisubjets.size()>=2){
-    sdpuppimass = (JetHelper::rawP4(*puppisubjets[0]) + JetHelper::rawP4(*puppisubjets[1])).mass();
-  }
-  double pt = jet_->pt();
-  double eta = jet_->eta();
-  double gencorr = 1.006261 + ((-1.061605) * pow(pt*0.079990,-1.204538));
-  double recocorr = 1;
-  if (std::abs(eta) <= 1.3){
-    recocorr = 1.093020+(-0.000150068)*pt+(3.44866e-07)*pow(pt,2)+(-2.68100e-10)*pow(pt,3)+(8.67440e-14)*pow(pt,4)+(-1.00114e-17)*pow(pt,5);
-  }else{
-    recocorr = 1.272115+(-0.000571640)*pt+(8.37289e-07)*pow(pt,2)+(-5.20433e-10)*pow(pt,3)+(1.45375e-13)*pow(pt,4)+(-1.50389e-17)*pow(pt,5);
-  }
-  return std::make_pair(sdpuppimass, sdpuppimass*gencorr*recocorr);
-}
-
 } /* namespace deepntuples */
