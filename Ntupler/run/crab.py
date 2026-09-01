@@ -7,6 +7,7 @@ import os
 import shutil
 import re
 import logging
+import math
 import CRABClient
 
 
@@ -27,6 +28,12 @@ def configLogger(name, loglevel=logging.INFO):
 logger = logging.getLogger('autocrab')
 configLogger('autocrab')
 _separator = '-' * 50
+
+
+def format_jet_radius(radius):
+    """Return a deterministic, CRAB-safe label for a physical jet radius."""
+    text = ('%.12g' % float(radius)).lower()
+    return text.replace('.', 'p').replace('-', 'm').replace('+', '')
 
 
 def natural_sort(l):
@@ -150,7 +157,9 @@ def createConfig(args, dataset, jet_radius=None):
 
     procname, vername, ext, isMC = parseDatasetName(dataset)
 
-    radius_suffix = '_AK%d' % jet_radius if jet_radius is not None else ''
+    radius_suffix = (
+        '_AKR%s' % format_jet_radius(jet_radius)
+        if jet_radius is not None else '')
     config.General.requestName = (
         procname[:100 - len(ext) - len(radius_suffix)] + ext + radius_suffix)
     config.General.workArea = args.work_area
@@ -167,7 +176,7 @@ def createConfig(args, dataset, jet_radius=None):
     if args.set_input_dataset:
         py_cfg_params.append('inputDataset=%s' % dataset)
     if jet_radius is not None:
-        py_cfg_params.append('jetRadius=%d' % jet_radius)
+        py_cfg_params.append('jetRadius=%.12g' % jet_radius)
         py_cfg_params.append('jetPtMin=%.6g' % args.jet_pt_min)
         py_cfg_params.append('jetPreselectionPtMin=%.6g' %
                              args.jet_preselection_pt_min)
@@ -534,8 +543,8 @@ def main():
                         help='Number of memory. Default: %(default)d MB'
                         )
     parser.add_argument('--jet-radii',
-                        default=[], nargs='*', type=int,
-                        help='Create one independent CRAB task per radius index (2-15), e.g. --jet-radii 2 3 ... 15'
+                        default=[], nargs='*', type=float,
+                        help='Create one independent CRAB task per physical jet radius, e.g. --jet-radii 0.2 0.25 0.3 0.8 1.5'
                         )
     parser.add_argument('--jet-pt-min',
                         default=200.0, type=float,
@@ -603,9 +612,15 @@ def main():
                         )
     args = parser.parse_args()
 
-    invalid_radii = [r for r in args.jet_radii if r < 2 or r > 15]
+    invalid_radii = [r for r in args.jet_radii
+                     if r <= 0 or math.isnan(r) or math.isinf(r)]
     if invalid_radii:
-        parser.error('--jet-radii values must be integers from 2 to 15: %s' % invalid_radii)
+        parser.error('--jet-radii values must be positive finite numbers: %s' %
+                     invalid_radii)
+    radius_labels = [format_jet_radius(r) for r in args.jet_radii]
+    if len(radius_labels) != len(set(radius_labels)):
+        parser.error('--jet-radii contains duplicate values at the supported '
+                     'naming precision: %s' % args.jet_radii)
     if min(args.jet_pt_min, args.jet_preselection_pt_min,
            args.gen_jet_pt_min) < 0:
         parser.error('all variable-R jet pT thresholds must be non-negative')
@@ -657,7 +672,8 @@ def main():
                     continue
                 logger.info('Submitting dataset %s%s' % (
                     dataset,
-                    ' with AK%d' % jet_radius if jet_radius is not None else ''))
+                    ' with R=%.12g' % jet_radius
+                    if jet_radius is not None else ''))
                 cmd = 'crab submit -c {cfgpath}'.format(cfgpath=cfgpath)
                 p = subprocess.Popen(cmd, shell=True)
                 p.communicate()

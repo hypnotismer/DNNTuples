@@ -25,6 +25,7 @@ from PhysicsTools.PatAlgos.tools.jetTools import addJetCollection, updateJetColl
 from PhysicsTools.PatAlgos.tools.helpers import getPatAlgosToolsTask, addToProcessAndTask
 from PhysicsTools.NanoAOD.common_cff import *
 from collections import OrderedDict
+import math
 
 def jetToolbox( proc, jetType, jetSequence, outputFile,
 		updateCollection='', updateCollectionSubjets='',
@@ -55,6 +56,7 @@ def jetToolbox( proc, jetType, jetSequence, outputFile,
 		addEnergyCorrFunc=False, ecfType = "N", ecfBeta = 1.0, ecfN3 = False,
 		addEnergyCorrFuncSubjets=False, ecfSubjetType = "N", ecfSubjetBeta = 1.0, ecfSubjetN3 = False,
 		verbosity=2, 	# 0 = no printouts, 1 = warnings only, 2 = warnings & info, 3 = warnings, info, debug
+		jetRadius=None, # explicit physical R; keeps the legacy name-derived R when omitted
 		):
 
 
@@ -94,11 +96,19 @@ def jetToolbox( proc, jetType, jetSequence, outputFile,
 		if TYPE in jetType.lower():
 			jetAlgo = TYPE
 			algorithm = tmpAlgo
-			size = jetType.replace( TYPE, '' )
+			algoPos = jetType.lower().find(TYPE)
+			size = jetType[:algoPos] + jetType[algoPos+len(TYPE):]
 
-	jetSize = 0.
-	if int(size) in range(0, 20): jetSize = int(size)/10.
-	else: raise ValueError('|---- jetToolBox: jetSize has not a valid value. Insert a number between 1 and 20 after algorithm, like: AK8')
+	if not jetAlgo:
+		raise ValueError('|---- jetToolBox: unsupported jet algorithm in '+jetType)
+	if jetRadius is None:
+		jetSize = 0.
+		if int(size) in range(0, 20): jetSize = int(size)/10.
+		else: raise ValueError('|---- jetToolBox: jetSize has not a valid value. Insert a number between 1 and 20 after algorithm, like: AK8')
+	else:
+		jetSize = float(jetRadius)
+		if jetSize <= 0 or math.isnan(jetSize) or math.isinf(jetSize):
+			raise ValueError('|---- jetToolBox: jetRadius must be a positive finite number')
 	### Trick for uppercase/lowercase algo name
 	jetALGO = jetAlgo.upper()+size
 	jetalgo = jetAlgo.lower()+size
@@ -370,7 +380,7 @@ def jetToolbox( proc, jetType, jetSequence, outputFile,
                     if JETCorrPayload not in payloadList:
                         print('|---- jetToolBox: JEC '+JETCorrPayload+' corrections not centrally supported (AK4PFchs,AK4PFPuppi,AK8PFchs,AK8PFPuppi). jetToolBox will assigned the closest JECs.')
                         tmpJetPayload = JETCorrPayload.split('PF')[1]
-                        if (int(size) >= 8): JETCorrPayload = 'AK8PF'+tmpJetPayload
+                        if (jetSize >= 0.8): JETCorrPayload = 'AK8PF'+tmpJetPayload
                         else: JETCorrPayload = 'AK4PF'+tmpJetPayload
                     JEC = ( JETCorrPayload.replace('CS','chs').replace('SK','chs') , JETCorrLevels, 'None' )
 		if verbosity>=2: print('|---- jetToolBox: Applying these corrections: '+str(JEC))
@@ -964,7 +974,7 @@ def jetToolbox( proc, jetType, jetSequence, outputFile,
 	#################################################################################
 	####### Adding HEPTopTagger
 	if addHEPTopTagger:
-		if ( int(size) != 1.5 ) and ( 'CA' in jetALGO ): print('|---- jetToolBox: HEPTtopTagger is recommented for CA15 jets. JTB will run the algorithm but use it on your own risk.')
+		if ( jetSize != 1.5 ) and ( 'CA' in jetALGO ): print('|---- jetToolBox: HEPTtopTagger is recommented for CA15 jets. JTB will run the algorithm but use it on your own risk.')
                 print('|---- jetToolBox: When running HEPTopTagger one will have several warnings about using an old version of Nsubjetiness. This is expected.')
 
 		mod["PFJetsHEPTopTag"] = mod["PFJets"].replace(jetalgo,"hepTopTag")

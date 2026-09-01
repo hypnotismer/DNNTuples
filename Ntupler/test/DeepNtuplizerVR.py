@@ -1,4 +1,5 @@
 import FWCore.ParameterSet.Config as cms
+import math
 
 from FWCore.ParameterSet.VarParsing import VarParsing
 
@@ -10,9 +11,9 @@ options.register('skipEvents', 0, VarParsing.multiplicity.singleton,
                  VarParsing.varType.int, 'skip N events')
 options.register('inputDataset', '', VarParsing.multiplicity.singleton,
                  VarParsing.varType.string, 'input dataset (set by CRAB)')
-options.register('jetRadius', 8, VarParsing.multiplicity.singleton,
-                 VarParsing.varType.int,
-                 'jet radius in tenths: an integer from 2 (R=0.2) to 15 (R=1.5)')
+options.register('jetRadius', 0.8, VarParsing.multiplicity.singleton,
+                 VarParsing.varType.float,
+                 'physical anti-kT jet radius: any positive finite number')
 options.register('jetPtMin', 200.0, VarParsing.multiplicity.singleton,
                  VarParsing.varType.float,
                  'minimum raw ungroomed jet pT written to the tuple in GeV')
@@ -31,8 +32,9 @@ options.register('keepAllEvents', False, VarParsing.multiplicity.singleton,
                  'keep all QCD/ttbar events when isTrainSample is false')
 options.parseArguments()
 
-if options.jetRadius < 2 or options.jetRadius > 15:
-    raise ValueError('jetRadius must be an integer from 2 to 15')
+if (options.jetRadius <= 0 or math.isnan(options.jetRadius) or
+        math.isinf(options.jetRadius)):
+    raise ValueError('jetRadius must be a positive finite number')
 if min(options.jetPtMin, options.jetPreselectionPtMin,
        options.genJetPtMin) < 0:
     raise ValueError('all jet pT thresholds must be non-negative')
@@ -40,15 +42,21 @@ if not options.genJetPtMin <= options.jetPreselectionPtMin <= options.jetPtMin:
     raise ValueError(
         'require genJetPtMin <= jetPreselectionPtMin <= jetPtMin')
 
-jet_radius_index = int(options.jetRadius)
-jetR = jet_radius_index / 10.0
+jetR = float(options.jetRadius)
 jetPtMin = float(options.jetPtMin)
 jetPreselectionPtMin = float(options.jetPreselectionPtMin)
 genJetPtMin = float(options.genJetPtMin)
-jet_collection = 'ak%d' % jet_radius_index
-jet_label = 'AK%d' % jet_radius_index
 
-print('Running variable-R DNNtuple production with %s (R=%.1f)' %
+# Keep the physical radius independent from CMSSW module names.  The normalized
+# token contains only letters and digits, and retains twelve significant digits
+# so distinct practical radius values do not silently share a collection name.
+radius_token = ('%.12g' % jetR).lower()
+radius_token = radius_token.replace('.', 'p').replace('-', 'm').replace('+', '')
+radius_token = 'r' + radius_token
+jet_collection = 'ak' + radius_token
+jet_label = 'AK' + radius_token
+
+print('Running variable-R DNNtuple production with %s (R=%.12g)' %
       (jet_label, jetR))
 print('Jet pT thresholds: Gen/SoftDrop=%.1f, reco preselection=%.1f, '
       'tuple=%.1f GeV' %
@@ -120,6 +128,7 @@ jetToolbox(
     subJETCorrLevels=['None'],
     bTagDiscriminators=['None'],
     subjetBTagDiscriminators=['None'],
+    jetRadius=jetR,
 )
 
 # Preserve the staged AK8 thresholds from dev-UL-hww.  The lower producer
@@ -194,6 +203,7 @@ process.deepntuplizer.jets = srcJets
 process.deepntuplizer.useReclusteredJets = True
 process.deepntuplizer.jetR = jetR
 process.deepntuplizer.jetType = 'AK'
+process.deepntuplizer.jetCollectionLabel = cms.untracked.string(jet_label)
 process.deepntuplizer.jetPtMin = jetPtMin
 process.deepntuplizer.jetPtMax = -1
 process.deepntuplizer.jetAbsEtaMax = -1

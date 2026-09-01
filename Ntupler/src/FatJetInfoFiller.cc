@@ -25,7 +25,11 @@ void FatJetInfoFiller::readConfig(const edm::ParameterSet& iConfig, edm::Consume
   isMDTagger_ = iConfig.getUntrackedParameter<bool>("isMDTagger", true);
   fillSeparateLabels_ = iConfig.getUntrackedParameter<bool>("fillSeparateLabels", false);
   adhocFixMode_ = iConfig.getUntrackedParameter<int>("adhocFixMode", 0);
-  fjName = iConfig.getParameter<std::string>("jetType") + std::to_string(int(10*jetR_));
+  fjName = iConfig.getUntrackedParameter<std::string>("jetCollectionLabel", "");
+  if (fjName.empty()) {
+    // Backward compatibility for the fixed-radius AK8/AK15 configurations.
+    fjName = iConfig.getParameter<std::string>("jetType") + std::to_string(int(10*jetR_));
+  }
 }
 
 void FatJetInfoFiller::readEvent(const edm::Event& iEvent, const edm::EventSetup& iSetup) {

@@ -18,12 +18,15 @@ scram b -j8
 ## Variable-R training tuples (`dev-UL-VR`)
 
 `Ntupler/test/DeepNtuplizerVR.py` reclusters one raw PUPPI anti-kT jet
-collection per job.  The `jetRadius` option is the radius in tenths and must be
-an integer from 2 through 15.  For example, an interactive AK6 test is:
+collection per job.  The `jetRadius` option is the physical radius itself and
+accepts any positive finite value.  For example, an interactive R=0.25 test is:
+
+Values are no longer encoded in tenths: use `jetRadius=0.2` for R=0.2;
+`jetRadius=2` now means the physical radius R=2.
 
 ```bash
 cmsRun Ntupler/test/DeepNtuplizerVR.py \
-  jetRadius=6 \
+  jetRadius=0.25 \
   jetPtMin=200 \
   jetPreselectionPtMin=170 \
   genJetPtMin=100 \
@@ -35,8 +38,8 @@ cmsRun Ntupler/test/DeepNtuplizerVR.py \
 No JEC payload is applied.  The production preserves the staged pT thresholds
 of the `dev-UL-hww` AK8 workflow: 100 GeV for GenJet and SoftDrop producers,
 170 GeV for reco-jet preselection, and 200 GeV for jets written to the tuple.
-These thresholds are identical for AK2 through AK15, and there is no eta or
-rapidity cut.  The existing signal miniAOD starts at a 150 GeV resonance-pT
+These thresholds are independent of R, and there is no eta or rapidity cut.
+The existing signal miniAOD starts at a 150 GeV resonance-pT
 scale while the QCD production starts at 170 GeV, so lowering the tuple cut
 would not extend the intended generated phase space.  Low-mass resonances are
 instead resolved with the smaller-R collections.  Every output row stores
@@ -44,16 +47,16 @@ instead resolved with the smaller-R collections.  Every output row stores
 only when all three direct gluon daughters are contained within the selected
 jet radius; its class index immediately follows `H_gg`.
 
-The CRAB helper can create independent tasks and ROOT outputs for all radii in
-one command.  Task request names and output dataset tags receive an `AK2`
-through `AK15` suffix:
+The CRAB helper can create independent tasks and ROOT outputs for any requested
+radius grid in one command.  Task request names and output dataset tags receive
+a normalized suffix such as `AKR0p25`:
 
 ```bash
 cd Ntupler/run
 python crab.py \
   --set-input-dataset \
   -p ../test/DeepNtuplizerVR.py \
-  --jet-radii 2 3 4 5 6 7 8 9 10 11 12 13 14 15 \
+  --jet-radii 0.2 0.25 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 \
   --jet-pt-min 200 \
   --jet-preselection-pt-min 170 \
   --gen-jet-pt-min 100 \
