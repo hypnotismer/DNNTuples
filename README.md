@@ -34,9 +34,11 @@ No JEC payload is applied.  The only jet-level kinematic selection is a
 configurable raw ungroomed-jet threshold, `jetPtMin=20` GeV by default; there is
 no eta or rapidity cut.  For a J/psi-scale mass, the conservative boosted scale
 for AK2 is `2m/R` about 31 GeV, so the 20 GeV production threshold is below the
-target region.  Every output row stores `fj_jetR`, `run_no`, `lumi_no`, and the
-64-bit `event_no`.  `H_ggg` is assigned only when all three direct gluon
-daughters are contained within the selected jet radius; its class index
+target region.  This threshold is not applied to the GenJet or SoftDrop
+producers, so retained reco jets near threshold do not lose matching or
+regression targets.  Every output row stores `fj_jetR`, `run_no`, `lumi_no`,
+and the 64-bit `event_no`.  `H_ggg` is assigned only when all three direct
+gluon daughters are contained within the selected jet radius; its class index
 immediately follows `H_gg`.
 
 The CRAB helper can create independent tasks and ROOT outputs for all radii in

@@ -168,6 +168,7 @@ def createConfig(args, dataset, jet_radius=None):
         py_cfg_params.append('inputDataset=%s' % dataset)
     if jet_radius is not None:
         py_cfg_params.append('jetRadius=%d' % jet_radius)
+        py_cfg_params.append('jetPtMin=%.6g' % args.jet_pt_min)
     if py_cfg_params:
         config.JobType.pyCfgParams = py_cfg_params
     if len(args.input_files) > 0:
@@ -533,6 +534,10 @@ def main():
                         default=[], nargs='*', type=int,
                         help='Create one independent CRAB task per radius index (2-15), e.g. --jet-radii 2 3 ... 15'
                         )
+    parser.add_argument('--jet-pt-min',
+                        default=20.0, type=float,
+                        help='Minimum raw ungroomed jet pT for variable-R tasks. Default: %(default)g GeV'
+                        )
     parser.add_argument('--dryrun',
                         action='store_true', default=False,
                         help='Only print the commands but do not submit. Default: %(default)s'
@@ -590,6 +595,8 @@ def main():
     invalid_radii = [r for r in args.jet_radii if r < 2 or r > 15]
     if invalid_radii:
         parser.error('--jet-radii values must be integers from 2 to 15: %s' % invalid_radii)
+    if args.jet_pt_min < 0:
+        parser.error('--jet-pt-min must be non-negative')
 
     if args.summary:
         summary_from_log_file()

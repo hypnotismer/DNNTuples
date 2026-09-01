@@ -107,11 +107,11 @@ jetToolbox(
     subjetBTagDiscriminators=['None'],
 )
 
-# Use one raw ungroomed-jet threshold at every R.  Do not impose the same
-# threshold again after grooming, since SoftDrop can lower the jet pT.
+# Apply the threshold only to raw ungroomed reco jets.  GenJet targets and
+# groomed jets remain uncut to avoid threshold-induced matching inefficiency.
 getattr(process, jet_collection + 'PFJetsPuppi').jetPtMin = jetPtMin
 getattr(process, jet_collection + 'PFJetsPuppiSoftDrop').jetPtMin = 0.0
-getattr(process, jet_collection + 'GenJetsNoNu').jetPtMin = jetPtMin
+getattr(process, jet_collection + 'GenJetsNoNu').jetPtMin = 0.0
 getattr(process, jet_collection + 'GenJetsNoNuSoftDrop').jetPtMin = 0.0
 
 srcJets = cms.InputTag('packedPatJets%sPFPuppiSoftDrop' % jet_label)
@@ -126,7 +126,7 @@ from RecoJets.Configuration.GenJetParticles_cff import genParticlesForJetsNoNu
 process.vrGenJetsWithNu = ak8GenJets.clone(
     src='packedGenParticles',
     rParam=cms.double(jetR),
-    jetPtMin=jetPtMin,
+    jetPtMin=0.0,
 )
 process.vrGenJetsWithNuSoftDrop = process.vrGenJetsWithNu.clone(
     jetPtMin=0.0,
