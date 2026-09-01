@@ -45,6 +45,18 @@ public:
   const std::vector<const pat::Jet*>& getSubJets() const { return subjets_; }
   const std::vector<const pat::Jet*>& getUncorrSubJets() const { return uncorr_subjets_; }
 
+  // VR jets are produced without a JEC payload.  PAT throws
+  // "This JEC set  does not exist" if correctedJet/P4 is called then.
+  static bool hasJEC(const pat::Jet& jet) {
+    return jet.jecSetsAvailable();
+  }
+  static reco::Candidate::LorentzVector rawP4(const pat::Jet& jet) {
+    return hasJEC(jet) ? jet.correctedP4("Uncorrected") : jet.p4();
+  }
+  static pat::Jet rawJet(const pat::Jet& jet) {
+    return hasJEC(jet) ? jet.correctedJet("Uncorrected") : jet;
+  }
+
   const reco::GenJet* genjetWithNu() const { return genjetWithNu_; }
   const reco::GenJet* genjetWithNuSoftDrop() const { return genjetWithNuSoftDrop_; }
   const reco::GenJet* genjetNoNu() const { return genjetNoNu_; }

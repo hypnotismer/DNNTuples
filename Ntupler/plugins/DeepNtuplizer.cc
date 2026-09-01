@@ -128,6 +128,7 @@ void DeepNtuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     bool write_ = true;
 
     const auto& jet = jets->at(idx); // need to keep the JEC for puppi sdmass corr
+    const pat::Jet jetUncorr = JetHelper::rawJet(jet);
     JetHelper jet_helper(&jet, candHandle);
     jet_helper.setGenjetWithNu((*genJetWithNuMatchHandle)[jets->refAt(idx)]);
     jet_helper.setGenjetWithNuSoftDrop((*genJetWithNuSoftDropMatchHandle)[jets->refAt(idx)]);
@@ -135,7 +136,7 @@ void DeepNtuplizer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     jet_helper.setGenjetNoNuSoftDrop((*genJetNoNuSoftDropMatchHandle)[jets->refAt(idx)]);
 
     for (auto *m : modules_){
-      if (!m->fillBranches(jet.correctedJet("Uncorrected"), idx, jet_helper)){
+      if (!m->fillBranches(jetUncorr, idx, jet_helper)){
         write_ = false;
         break;
       }

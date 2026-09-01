@@ -85,7 +85,7 @@ bool JetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper& je
   // truth labels
   float gen_pt = jet.genJet() ? jet.genJet()->pt() : 0;
   data.fill<float>("gen_pt", gen_pt);
-  data.fill<float>("Delta_gen_pt", gen_pt - jet.correctedJet("Uncorrected").pt());
+  data.fill<float>("Delta_gen_pt", gen_pt - JetHelper::rawP4(jet).pt());
 
   auto flavor = flavorDef.jet_flavour(jet);
   data.fill<int>("isB", flavor==JetFlavor::B);
@@ -99,7 +99,7 @@ bool JetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper& je
   data.fill<int>("isUndefined", flavor==JetFlavor::UNDEFINED);
 
   // jet variables
-  data.fill<float>("jet_pt", jet.correctedJet("Uncorrected").pt());
+  data.fill<float>("jet_pt", JetHelper::rawP4(jet).pt());
   data.fill<float>("jet_corr_pt", jet.pt());
   data.fill<float>("jet_eta", jet.eta());
   data.fill<float>("jet_phi", jet.phi());

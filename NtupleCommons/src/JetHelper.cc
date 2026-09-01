@@ -32,7 +32,9 @@ void JetHelper::initializeConstituents(const edm::Handle<reco::CandidateView> &p
       [](const pat::Jet* p1, const pat::Jet* p2){return p1->pt()>p2->pt();});
 
   std::sort(uncorr_subjets_.begin(), uncorr_subjets_.end(),
-      [](const pat::Jet* p1, const pat::Jet* p2){return p1->correctedP4("Uncorrected").pt()>p2->correctedP4("Uncorrected").pt();});
+      [](const pat::Jet* p1, const pat::Jet* p2){
+        return JetHelper::rawP4(*p1).pt() > JetHelper::rawP4(*p2).pt();
+      });
 
   // get all consitituents
   for (unsigned idau=0; idau<jet_->numberOfDaughters(); ++idau){
@@ -71,9 +73,9 @@ void JetHelper::initializeConstituents(const edm::Handle<reco::CandidateView> &p
 std::pair<double, double> JetHelper::getCorrectedPuppiSoftDropMass(const std::vector<const pat::Jet*> &puppisubjets) const {
   double sdpuppimass = 0;
   if (puppisubjets.size()==1){
-    sdpuppimass = puppisubjets[0]->correctedP4(0).mass();
+    sdpuppimass = JetHelper::rawP4(*puppisubjets[0]).mass();
   }else if (puppisubjets.size()>=2){
-    sdpuppimass = (puppisubjets[0]->correctedP4(0) + puppisubjets[1]->correctedP4(0)).mass();
+    sdpuppimass = (JetHelper::rawP4(*puppisubjets[0]) + JetHelper::rawP4(*puppisubjets[1])).mass();
   }
   double pt = jet_->pt();
   double eta = jet_->eta();
