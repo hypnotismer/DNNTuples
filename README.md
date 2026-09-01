@@ -24,22 +24,25 @@ an integer from 2 through 15.  For example, an interactive AK6 test is:
 ```bash
 cmsRun Ntupler/test/DeepNtuplizerVR.py \
   jetRadius=6 \
-  jetPtMin=20 \
+  jetPtMin=200 \
+  jetPreselectionPtMin=170 \
+  genJetPtMin=100 \
   inputFiles=file:/path/to/input.root \
   outputFile=output_AK6.root \
   maxEvents=100
 ```
 
-No JEC payload is applied.  The only jet-level kinematic selection is a
-configurable raw ungroomed-jet threshold, `jetPtMin=20` GeV by default; there is
-no eta or rapidity cut.  For a J/psi-scale mass, the conservative boosted scale
-for AK2 is `2m/R` about 31 GeV, so the 20 GeV production threshold is below the
-target region.  This threshold is not applied to the GenJet or SoftDrop
-producers, so retained reco jets near threshold do not lose matching or
-regression targets.  Every output row stores `fj_jetR`, `run_no`, `lumi_no`,
-and the 64-bit `event_no`.  `H_ggg` is assigned only when all three direct
-gluon daughters are contained within the selected jet radius; its class index
-immediately follows `H_gg`.
+No JEC payload is applied.  The production preserves the staged pT thresholds
+of the `dev-UL-hww` AK8 workflow: 100 GeV for GenJet and SoftDrop producers,
+170 GeV for reco-jet preselection, and 200 GeV for jets written to the tuple.
+These thresholds are identical for AK2 through AK15, and there is no eta or
+rapidity cut.  The existing signal miniAOD starts at a 150 GeV resonance-pT
+scale while the QCD production starts at 170 GeV, so lowering the tuple cut
+would not extend the intended generated phase space.  Low-mass resonances are
+instead resolved with the smaller-R collections.  Every output row stores
+`fj_jetR`, `run_no`, `lumi_no`, and the 64-bit `event_no`.  `H_ggg` is assigned
+only when all three direct gluon daughters are contained within the selected
+jet radius; its class index immediately follows `H_gg`.
 
 The CRAB helper can create independent tasks and ROOT outputs for all radii in
 one command.  Task request names and output dataset tags receive an `AK2`
@@ -51,7 +54,9 @@ python crab.py \
   --set-input-dataset \
   -p ../test/DeepNtuplizerVR.py \
   --jet-radii 2 3 4 5 6 7 8 9 10 11 12 13 14 15 \
-  --jet-pt-min 20 \
+  --jet-pt-min 200 \
+  --jet-preselection-pt-min 170 \
+  --gen-jet-pt-min 100 \
   --site T2_CH_CERN \
   -o /store/user/$USER/DeepNtuples/VR-v1 \
   -t DeepNtuplesVR-v1 \

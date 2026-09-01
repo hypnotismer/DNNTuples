@@ -13,9 +13,15 @@ options.register('inputDataset', '', VarParsing.multiplicity.singleton,
 options.register('jetRadius', 8, VarParsing.multiplicity.singleton,
                  VarParsing.varType.int,
                  'jet radius in tenths: an integer from 2 (R=0.2) to 15 (R=1.5)')
-options.register('jetPtMin', 20.0, VarParsing.multiplicity.singleton,
+options.register('jetPtMin', 200.0, VarParsing.multiplicity.singleton,
                  VarParsing.varType.float,
-                 'minimum raw ungroomed jet pT in GeV')
+                 'minimum raw ungroomed jet pT written to the tuple in GeV')
+options.register('jetPreselectionPtMin', 170.0,
+                 VarParsing.multiplicity.singleton, VarParsing.varType.float,
+                 'minimum raw reco-jet pT used by jetToolbox in GeV')
+options.register('genJetPtMin', 100.0, VarParsing.multiplicity.singleton,
+                 VarParsing.varType.float,
+                 'minimum GenJet and SoftDrop-jet pT in GeV')
 options.register('isTrainSample', True, VarParsing.multiplicity.singleton,
                  VarParsing.varType.bool, 'produce a training sample')
 options.register('addLowLevel', True, VarParsing.multiplicity.singleton,
@@ -27,17 +33,26 @@ options.parseArguments()
 
 if options.jetRadius < 2 or options.jetRadius > 15:
     raise ValueError('jetRadius must be an integer from 2 to 15')
-if options.jetPtMin < 0:
-    raise ValueError('jetPtMin must be non-negative')
+if min(options.jetPtMin, options.jetPreselectionPtMin,
+       options.genJetPtMin) < 0:
+    raise ValueError('all jet pT thresholds must be non-negative')
+if not options.genJetPtMin <= options.jetPreselectionPtMin <= options.jetPtMin:
+    raise ValueError(
+        'require genJetPtMin <= jetPreselectionPtMin <= jetPtMin')
 
 jet_radius_index = int(options.jetRadius)
 jetR = jet_radius_index / 10.0
 jetPtMin = float(options.jetPtMin)
+jetPreselectionPtMin = float(options.jetPreselectionPtMin)
+genJetPtMin = float(options.genJetPtMin)
 jet_collection = 'ak%d' % jet_radius_index
 jet_label = 'AK%d' % jet_radius_index
 
 print('Running variable-R DNNtuple production with %s (R=%.1f)' %
       (jet_label, jetR))
+print('Jet pT thresholds: Gen/SoftDrop=%.1f, reco preselection=%.1f, '
+      'tuple=%.1f GeV' %
+      (genJetPtMin, jetPreselectionPtMin, jetPtMin))
 print('Input files:', options.inputFiles)
 
 globalTagMap = {
@@ -95,7 +110,7 @@ jetToolbox(
     PUMethod='Puppi',
     JETCorrPayload='None',
     JETCorrLevels=['None'],
-    Cut='pt > %.6g' % jetPtMin,
+    Cut='pt > %.6g' % jetPreselectionPtMin,
     runOnMC=True,
     addNsub=True,
     maxTau=3,
@@ -107,12 +122,13 @@ jetToolbox(
     subjetBTagDiscriminators=['None'],
 )
 
-# Apply the threshold only to raw ungroomed reco jets.  GenJet targets and
-# groomed jets remain uncut to avoid threshold-induced matching inefficiency.
-getattr(process, jet_collection + 'PFJetsPuppi').jetPtMin = jetPtMin
-getattr(process, jet_collection + 'PFJetsPuppiSoftDrop').jetPtMin = 0.0
-getattr(process, jet_collection + 'GenJetsNoNu').jetPtMin = 0.0
-getattr(process, jet_collection + 'GenJetsNoNuSoftDrop').jetPtMin = 0.0
+# Preserve the staged AK8 thresholds from dev-UL-hww.  The lower producer
+# thresholds provide matching headroom below the final tuple selection without
+# reconstructing jets outside the generated miniAOD phase space.
+getattr(process, jet_collection + 'PFJetsPuppi').jetPtMin = jetPreselectionPtMin
+getattr(process, jet_collection + 'PFJetsPuppiSoftDrop').jetPtMin = genJetPtMin
+getattr(process, jet_collection + 'GenJetsNoNu').jetPtMin = genJetPtMin
+getattr(process, jet_collection + 'GenJetsNoNuSoftDrop').jetPtMin = genJetPtMin
 
 srcJets = cms.InputTag('packedPatJets%sPFPuppiSoftDrop' % jet_label)
 
@@ -126,10 +142,9 @@ from RecoJets.Configuration.GenJetParticles_cff import genParticlesForJetsNoNu
 process.vrGenJetsWithNu = ak8GenJets.clone(
     src='packedGenParticles',
     rParam=cms.double(jetR),
-    jetPtMin=0.0,
+    jetPtMin=genJetPtMin,
 )
 process.vrGenJetsWithNuSoftDrop = process.vrGenJetsWithNu.clone(
-    jetPtMin=0.0,
     useSoftDrop=cms.bool(True),
     zcut=cms.double(0.1),
     beta=cms.double(0.0),

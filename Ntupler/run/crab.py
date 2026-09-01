@@ -169,6 +169,9 @@ def createConfig(args, dataset, jet_radius=None):
     if jet_radius is not None:
         py_cfg_params.append('jetRadius=%d' % jet_radius)
         py_cfg_params.append('jetPtMin=%.6g' % args.jet_pt_min)
+        py_cfg_params.append('jetPreselectionPtMin=%.6g' %
+                             args.jet_preselection_pt_min)
+        py_cfg_params.append('genJetPtMin=%.6g' % args.gen_jet_pt_min)
     if py_cfg_params:
         config.JobType.pyCfgParams = py_cfg_params
     if len(args.input_files) > 0:
@@ -535,8 +538,16 @@ def main():
                         help='Create one independent CRAB task per radius index (2-15), e.g. --jet-radii 2 3 ... 15'
                         )
     parser.add_argument('--jet-pt-min',
-                        default=20.0, type=float,
-                        help='Minimum raw ungroomed jet pT for variable-R tasks. Default: %(default)g GeV'
+                        default=200.0, type=float,
+                        help='Final tuple jet pT threshold for variable-R tasks. Default: %(default)g GeV'
+                        )
+    parser.add_argument('--jet-preselection-pt-min',
+                        default=170.0, type=float,
+                        help='Reco-jet preselection for variable-R tasks. Default: %(default)g GeV'
+                        )
+    parser.add_argument('--gen-jet-pt-min',
+                        default=100.0, type=float,
+                        help='GenJet and SoftDrop-jet pT threshold for variable-R tasks. Default: %(default)g GeV'
                         )
     parser.add_argument('--dryrun',
                         action='store_true', default=False,
@@ -595,8 +606,13 @@ def main():
     invalid_radii = [r for r in args.jet_radii if r < 2 or r > 15]
     if invalid_radii:
         parser.error('--jet-radii values must be integers from 2 to 15: %s' % invalid_radii)
-    if args.jet_pt_min < 0:
-        parser.error('--jet-pt-min must be non-negative')
+    if min(args.jet_pt_min, args.jet_preselection_pt_min,
+           args.gen_jet_pt_min) < 0:
+        parser.error('all variable-R jet pT thresholds must be non-negative')
+    if not (args.gen_jet_pt_min <= args.jet_preselection_pt_min <=
+            args.jet_pt_min):
+        parser.error('require --gen-jet-pt-min <= '
+                     '--jet-preselection-pt-min <= --jet-pt-min')
 
     if args.summary:
         summary_from_log_file()
