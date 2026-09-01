@@ -144,13 +144,15 @@ def writeConfig(config, work_area):
     return cfgpath
 
 
-def createConfig(args, dataset):
+def createConfig(args, dataset, jet_radius=None):
     from CRABClient.UserUtilities import config
     config = config()
 
     procname, vername, ext, isMC = parseDatasetName(dataset)
 
-    config.General.requestName = procname[:100 - len(ext)] + ext
+    radius_suffix = '_AK%d' % jet_radius if jet_radius is not None else ''
+    config.General.requestName = (
+        procname[:100 - len(ext) - len(radius_suffix)] + ext + radius_suffix)
     config.General.workArea = args.work_area
     config.General.transferOutputs = True
     config.General.transferLogs = False
@@ -161,8 +163,13 @@ def createConfig(args, dataset):
     config.JobType.allowUndistributedCMSSW = True
     config.JobType.numCores = args.num_cores
     config.JobType.maxMemoryMB = args.max_memory
+    py_cfg_params = []
     if args.set_input_dataset:
-        config.JobType.pyCfgParams = ['inputDataset=%s' % dataset]
+        py_cfg_params.append('inputDataset=%s' % dataset)
+    if jet_radius is not None:
+        py_cfg_params.append('jetRadius=%d' % jet_radius)
+    if py_cfg_params:
+        config.JobType.pyCfgParams = py_cfg_params
     if len(args.input_files) > 0:
         config.JobType.inputFiles = args.input_files
 
@@ -174,7 +181,7 @@ def createConfig(args, dataset):
         config.Data.totalUnits = args.max_units
     if args.no_publication:
         config.Data.publication = False
-    config.Data.outputDatasetTag = args.tag + '_' + vername
+    config.Data.outputDatasetTag = args.tag + radius_suffix + '_' + vername
     config.Data.allowNonValidInputDataset = True
     config.Data.outLFNDirBase = args.outputdir
 
@@ -522,6 +529,10 @@ def main():
                         default=2000, type=int,
                         help='Number of memory. Default: %(default)d MB'
                         )
+    parser.add_argument('--jet-radii',
+                        default=[], nargs='*', type=int,
+                        help='Create one independent CRAB task per radius index (2-15), e.g. --jet-radii 2 3 ... 15'
+                        )
     parser.add_argument('--dryrun',
                         action='store_true', default=False,
                         help='Only print the commands but do not submit. Default: %(default)s'
@@ -576,6 +587,10 @@ def main():
                         )
     args = parser.parse_args()
 
+    invalid_radii = [r for r in args.jet_radii if r < 2 or r > 15]
+    if invalid_radii:
+        parser.error('--jet-radii values must be integers from 2 to 15: %s' % invalid_radii)
+
     if args.summary:
         summary_from_log_file()
         return
@@ -606,21 +621,25 @@ def main():
             if not l or l.startswith('#'):
                 continue
             dataset = [s for s in l.split() if '/MINIAOD' in s][0]
-            cfg, cfgpath = createConfig(args, dataset)
-            if cfg.General.requestName in request_names:
-                request_names[cfg.General.requestName].append(dataset)
-            else:
-                request_names[cfg.General.requestName] = [dataset]
-            if args.dryrun:
-                print('-' * 50)
-                print(cfg)
-                continue
-            logger.info('Submitting dataset %s' % dataset)
-            cmd = 'crab submit -c {cfgpath}'.format(cfgpath=cfgpath)
-            p = subprocess.Popen(cmd, shell=True)
-            p.communicate()
-            if p.returncode != 0:
-                submit_failed.append(cfgpath)
+            radii = args.jet_radii if args.jet_radii else [None]
+            for jet_radius in radii:
+                cfg, cfgpath = createConfig(args, dataset, jet_radius)
+                if cfg.General.requestName in request_names:
+                    request_names[cfg.General.requestName].append(dataset)
+                else:
+                    request_names[cfg.General.requestName] = [dataset]
+                if args.dryrun:
+                    print('-' * 50)
+                    print(cfg)
+                    continue
+                logger.info('Submitting dataset %s%s' % (
+                    dataset,
+                    ' with AK%d' % jet_radius if jet_radius is not None else ''))
+                cmd = 'crab submit -c {cfgpath}'.format(cfgpath=cfgpath)
+                p = subprocess.Popen(cmd, shell=True)
+                p.communicate()
+                if p.returncode != 0:
+                    submit_failed.append(cfgpath)
 #             runCrabCommand('submit', config=cfg)
 
     if len(submit_failed):

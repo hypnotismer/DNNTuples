@@ -7,13 +7,55 @@ cd CMSSW_10_6_30/src
 cmsenv
 
 # use an updated onnxruntime package
-bash <(curl -s https://raw.githubusercontent.com/colizz/DNNTuples/dev-UL-hww/Ntupler/scripts/install_onnxruntime.sh)
+bash <(curl -s https://raw.githubusercontent.com/hypnotismer/DNNTuples/dev-UL-VR/Ntupler/scripts/install_onnxruntime.sh)
 
 # clone this repo into "DeepNTuples" directory
-git clone git@github.com:colizz/DNNTuplesAK8.git DeepNTuples -b dev-UL-hww
+git clone git@github.com:hypnotismer/DNNTuples.git DeepNTuples -b dev-UL-VR
 
 scram b -j8
 ```
+
+## Variable-R training tuples (`dev-UL-VR`)
+
+`Ntupler/test/DeepNtuplizerVR.py` reclusters one raw PUPPI anti-kT jet
+collection per job.  The `jetRadius` option is the radius in tenths and must be
+an integer from 2 through 15.  For example, an interactive AK6 test is:
+
+```bash
+cmsRun Ntupler/test/DeepNtuplizerVR.py \
+  jetRadius=6 \
+  inputFiles=file:/path/to/input.root \
+  outputFile=output_AK6.root \
+  maxEvents=100
+```
+
+No JEC payload is applied.  Every output row stores `fj_jetR`, `run_no`,
+`lumi_no`, and the 64-bit `event_no`.  `H_ggg` is assigned only when all three
+direct gluon daughters are contained within the selected jet radius; its class
+index immediately follows `H_gg`.
+
+The CRAB helper can create independent tasks and ROOT outputs for all radii in
+one command.  Task request names and output dataset tags receive an `AK2`
+through `AK15` suffix:
+
+```bash
+cd Ntupler/run
+python crab.py \
+  --set-input-dataset \
+  -p ../test/DeepNtuplizerVR.py \
+  --jet-radii 2 3 4 5 6 7 8 9 10 11 12 13 14 15 \
+  --site T2_CH_CERN \
+  -o /store/user/$USER/DeepNtuples/VR-v1 \
+  -t DeepNtuplesVR-v1 \
+  --no-publication \
+  -i samples/UL17/ak8/signals.conf \
+  -s FileBased -n 1 \
+  --work-area crab_projects_VR-v1 \
+  --send-external \
+  --dryrun
+```
+
+Inspect the generated configurations first, then remove `--dryrun` to submit.
 
 <!-- 
 ## Submit jobs via CRAB

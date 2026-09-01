@@ -146,6 +146,7 @@ void FatJetInfoFiller::book() {
   data.add<float>("fj_phi", 0);
   data.add<float>("fj_mass", 0);
   data.add<float>("fj_energy", 0);
+  data.add<float>("fj_jetR", jetR_);
 
   // substructure
   data.add<float>("fj_tau1", 0);
@@ -357,6 +358,7 @@ bool FatJetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper&
   data.fill<float>("fj_phi", jet.phi());
   data.fill<float>("fj_mass", jet.mass());
   data.fill<float>("fj_energy", jet.energy());
+  data.fill<float>("fj_jetR", jetR_);
 
   // substructure
   float tau1 = jet.userFloat("Njettiness" + fjName +"Puppi:tau1");

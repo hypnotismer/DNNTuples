@@ -64,7 +64,7 @@ private:
   std::vector<std::string> labelW_ = {"cs", "qq", "ev", "mv", "tauev", "taumv", "tauhv"};
   std::vector<std::string> labelZ_ = {"bb", "cc", "ss", "qq"};
   std::vector<std::string> labelH2p_ = {
-    "bb", "cc", "ss", "qq", "bc", "bs", "cs", "gg",
+    "bb", "cc", "ss", "qq", "bc", "bs", "cs", "gg", "ggg",
     "ee", "mm", "tauhtaue", "tauhtaum", "tauhtauh"};
   std::vector<std::string> labelHWW_ = {
     "cscs", "csqq", "qqqq",

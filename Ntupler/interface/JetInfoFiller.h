@@ -58,7 +58,9 @@ private:
   edm::Handle<std::vector<PileupSummaryInfo>> puInfo;
   edm::Handle<double> rhoInfo;
 
-  unsigned event_ = 0;
+  unsigned run_ = 0;
+  unsigned lumi_ = 0;
+  unsigned long long event_ = 0;
 
   edm::EDGetTokenT<reco::GenParticleCollection> genParticlesToken_;
   edm::Handle<reco::GenParticleCollection> genParticlesHandle;

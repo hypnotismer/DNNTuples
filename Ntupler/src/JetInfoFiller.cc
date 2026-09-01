@@ -35,6 +35,8 @@ void JetInfoFiller::readEvent(const edm::Event& iEvent, const edm::EventSetup& i
   iEvent.getByToken(vtxToken_, vertices);
   iEvent.getByToken(puToken_, puInfo);
   iEvent.getByToken(rhoToken_, rhoInfo);
+  run_ = iEvent.id().run();
+  lumi_ = iEvent.id().luminosityBlock();
   event_ = iEvent.id().event();
   iEvent.getByToken(genParticlesToken_, genParticlesHandle);
   flavorDef.setGenParticles(*genParticlesHandle);
@@ -59,7 +61,9 @@ bool JetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper& je
   }
 
   // event information
-  data.fill<unsigned>("event_no", event_);
+  data.fill<unsigned>("run_no", run_);
+  data.fill<unsigned>("lumi_no", lumi_);
+  data.fill<unsigned long long>("event_no", event_);
   data.fill<unsigned>("jet_no", jetidx);
   data.fill<float>("npv", vertices->size());
   data.fill<float>("rho", *rhoInfo);
@@ -127,7 +131,9 @@ void JetInfoFiller::book() {
   data.add<float>("npv", 0);
   data.add<float>("rho", 0);
   data.add<float>("ntrueInt", 0);
-  data.add<unsigned>("event_no", 0);
+  data.add<unsigned>("run_no", 0);
+  data.add<unsigned>("lumi_no", 0);
+  data.add<unsigned long long>("event_no", 0);
   data.add<unsigned>("jet_no", 0);
 
   // MET information
@@ -176,4 +182,3 @@ void JetInfoFiller::book() {
 
 
 } /* namespace deepntuples */
-

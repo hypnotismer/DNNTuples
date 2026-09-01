@@ -565,9 +565,26 @@ void FatJetMatching::higgs_label(const pat::Jet* jet, const reco::GenParticle *p
   enum HDecay {h_2p, h_tautau, h_qtau, h_WW, h_ZZ, h_WHorZH, h_null};
   HDecay hdecay = h_null;
   auto hdaus = getDaughters(higgs);
-  if (higgs->numberOfDaughters() >= 3) {
-    // e.g., h->Vqq or h->qqqq
-    throw std::runtime_error("[FatJetMatching::higgs_label] H decays to 3/4 objects: not implemented");
+  if (hdaus.size() == 3) {
+    // Dedicated variable-R training label: accept only direct H -> ggg
+    // decays for which all three gluons are contained inside the jet.
+    bool all_gluons_contained = true;
+    for (const auto *dau : hdaus) {
+      if (std::abs(dau->pdgId()) != ParticleID::p_g ||
+          reco::deltaR(jet->p4(), dau->p4()) >= distR) {
+        all_gluons_contained = false;
+        break;
+      }
+    }
+    if (all_gluons_contained) {
+      getResult().particles.insert(getResult().particles.end(), hdaus.begin(), hdaus.end());
+      getResult().label = "H_ggg";
+    }
+    return;
+  }
+  if (hdaus.size() != 2) {
+    // Other direct three-/multi-body Higgs decays are outside this schema.
+    return;
   }else {
     auto pdgid1 = std::abs(hdaus.at(0)->pdgId()), pdgid2 = std::abs(hdaus.at(1)->pdgId());
     if (pdgid1 == ParticleID::p_Wplus && pdgid2 == ParticleID::p_Wplus) {
