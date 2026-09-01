@@ -53,7 +53,7 @@ bool JetInfoFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper& je
   // jet selection
   if (jet.pt() < minPt_) return false;
   if (maxPt_ > 0 && jet.pt() > maxPt_) return false;
-  if (std::abs(jet.eta()) > maxAbsEta_) return false;
+  if (maxAbsEta_ > 0 && std::abs(jet.eta()) > maxAbsEta_) return false;
 
   // QCD and ttbar samples for inference: keep only 1/7 of the events
   if (!isTrainSample_ && !keepAllEvents_ && (isQCDSample_ || isTTBarSample_)) {

@@ -29,10 +29,12 @@ cmsRun Ntupler/test/DeepNtuplizerVR.py \
   maxEvents=100
 ```
 
-No JEC payload is applied.  Every output row stores `fj_jetR`, `run_no`,
-`lumi_no`, and the 64-bit `event_no`.  `H_ggg` is assigned only when all three
-direct gluon daughters are contained within the selected jet radius; its class
-index immediately follows `H_gg`.
+No JEC payload or jet kinematic selection is applied during tuple production;
+phase-space cuts should be made offline after aligning entries across radii.
+Every output row stores `fj_jetR`, `run_no`, `lumi_no`, and the 64-bit
+`event_no`.  `H_ggg` is assigned only when all three direct gluon daughters are
+contained within the selected jet radius; its class index immediately follows
+`H_gg`.
 
 The CRAB helper can create independent tasks and ROOT outputs for all radii in
 one command.  Task request names and output dataset tags receive an `AK2`

@@ -89,7 +89,7 @@ jetToolbox(
     PUMethod='Puppi',
     JETCorrPayload='None',
     JETCorrLevels=['None'],
-    Cut='pt > 120.0 && abs(rapidity()) < 2.4',
+    Cut='',
     runOnMC=True,
     addNsub=True,
     maxTau=3,
@@ -100,6 +100,14 @@ jetToolbox(
     bTagDiscriminators=['None'],
     subjetBTagDiscriminators=['None'],
 )
+
+# Do not inherit producer-level pT thresholds.  Kinematic phase-space
+# selections must be applied after production so that every R sees the same
+# event sample before selection.
+getattr(process, jet_collection + 'PFJetsPuppi').jetPtMin = 0.0
+getattr(process, jet_collection + 'PFJetsPuppiSoftDrop').jetPtMin = 0.0
+getattr(process, jet_collection + 'GenJetsNoNu').jetPtMin = 0.0
+getattr(process, jet_collection + 'GenJetsNoNuSoftDrop').jetPtMin = 0.0
 
 srcJets = cms.InputTag('packedPatJets%sPFPuppiSoftDrop' % jet_label)
 
@@ -113,7 +121,7 @@ from RecoJets.Configuration.GenJetParticles_cff import genParticlesForJetsNoNu
 process.vrGenJetsWithNu = ak8GenJets.clone(
     src='packedGenParticles',
     rParam=cms.double(jetR),
-    jetPtMin=100.0,
+    jetPtMin=0.0,
 )
 process.vrGenJetsWithNuSoftDrop = process.vrGenJetsWithNu.clone(
     useSoftDrop=cms.bool(True),
@@ -165,7 +173,9 @@ process.deepntuplizer.jets = srcJets
 process.deepntuplizer.useReclusteredJets = True
 process.deepntuplizer.jetR = jetR
 process.deepntuplizer.jetType = 'AK'
-process.deepntuplizer.jetPtMin = 150
+process.deepntuplizer.jetPtMin = 0
+process.deepntuplizer.jetPtMax = -1
+process.deepntuplizer.jetAbsEtaMax = -1
 process.deepntuplizer.addLowLevel = options.addLowLevel
 process.deepntuplizer.bDiscriminators = cms.vstring()
 process.deepntuplizer.genJetsWithNuMatch = 'vrGenJetsWithNuMatch'
