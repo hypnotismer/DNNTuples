@@ -13,6 +13,9 @@ options.register('inputDataset', '', VarParsing.multiplicity.singleton,
 options.register('jetRadius', 8, VarParsing.multiplicity.singleton,
                  VarParsing.varType.int,
                  'jet radius in tenths: an integer from 2 (R=0.2) to 15 (R=1.5)')
+options.register('jetPtMin', 20.0, VarParsing.multiplicity.singleton,
+                 VarParsing.varType.float,
+                 'minimum raw ungroomed jet pT in GeV')
 options.register('isTrainSample', True, VarParsing.multiplicity.singleton,
                  VarParsing.varType.bool, 'produce a training sample')
 options.register('addLowLevel', True, VarParsing.multiplicity.singleton,
@@ -24,9 +27,12 @@ options.parseArguments()
 
 if options.jetRadius < 2 or options.jetRadius > 15:
     raise ValueError('jetRadius must be an integer from 2 to 15')
+if options.jetPtMin < 0:
+    raise ValueError('jetPtMin must be non-negative')
 
 jet_radius_index = int(options.jetRadius)
 jetR = jet_radius_index / 10.0
+jetPtMin = float(options.jetPtMin)
 jet_collection = 'ak%d' % jet_radius_index
 jet_label = 'AK%d' % jet_radius_index
 
@@ -89,7 +95,7 @@ jetToolbox(
     PUMethod='Puppi',
     JETCorrPayload='None',
     JETCorrLevels=['None'],
-    Cut='',
+    Cut='pt > %.6g' % jetPtMin,
     runOnMC=True,
     addNsub=True,
     maxTau=3,
@@ -101,12 +107,11 @@ jetToolbox(
     subjetBTagDiscriminators=['None'],
 )
 
-# Do not inherit producer-level pT thresholds.  Kinematic phase-space
-# selections must be applied after production so that every R sees the same
-# event sample before selection.
-getattr(process, jet_collection + 'PFJetsPuppi').jetPtMin = 0.0
+# Use one raw ungroomed-jet threshold at every R.  Do not impose the same
+# threshold again after grooming, since SoftDrop can lower the jet pT.
+getattr(process, jet_collection + 'PFJetsPuppi').jetPtMin = jetPtMin
 getattr(process, jet_collection + 'PFJetsPuppiSoftDrop').jetPtMin = 0.0
-getattr(process, jet_collection + 'GenJetsNoNu').jetPtMin = 0.0
+getattr(process, jet_collection + 'GenJetsNoNu').jetPtMin = jetPtMin
 getattr(process, jet_collection + 'GenJetsNoNuSoftDrop').jetPtMin = 0.0
 
 srcJets = cms.InputTag('packedPatJets%sPFPuppiSoftDrop' % jet_label)
@@ -121,9 +126,10 @@ from RecoJets.Configuration.GenJetParticles_cff import genParticlesForJetsNoNu
 process.vrGenJetsWithNu = ak8GenJets.clone(
     src='packedGenParticles',
     rParam=cms.double(jetR),
-    jetPtMin=0.0,
+    jetPtMin=jetPtMin,
 )
 process.vrGenJetsWithNuSoftDrop = process.vrGenJetsWithNu.clone(
+    jetPtMin=0.0,
     useSoftDrop=cms.bool(True),
     zcut=cms.double(0.1),
     beta=cms.double(0.0),
@@ -173,7 +179,7 @@ process.deepntuplizer.jets = srcJets
 process.deepntuplizer.useReclusteredJets = True
 process.deepntuplizer.jetR = jetR
 process.deepntuplizer.jetType = 'AK'
-process.deepntuplizer.jetPtMin = 0
+process.deepntuplizer.jetPtMin = jetPtMin
 process.deepntuplizer.jetPtMax = -1
 process.deepntuplizer.jetAbsEtaMax = -1
 process.deepntuplizer.addLowLevel = options.addLowLevel

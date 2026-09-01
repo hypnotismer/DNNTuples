@@ -24,17 +24,20 @@ an integer from 2 through 15.  For example, an interactive AK6 test is:
 ```bash
 cmsRun Ntupler/test/DeepNtuplizerVR.py \
   jetRadius=6 \
+  jetPtMin=20 \
   inputFiles=file:/path/to/input.root \
   outputFile=output_AK6.root \
   maxEvents=100
 ```
 
-No JEC payload or jet kinematic selection is applied during tuple production;
-phase-space cuts should be made offline after aligning entries across radii.
-Every output row stores `fj_jetR`, `run_no`, `lumi_no`, and the 64-bit
-`event_no`.  `H_ggg` is assigned only when all three direct gluon daughters are
-contained within the selected jet radius; its class index immediately follows
-`H_gg`.
+No JEC payload is applied.  The only jet-level kinematic selection is a
+configurable raw ungroomed-jet threshold, `jetPtMin=20` GeV by default; there is
+no eta or rapidity cut.  For a J/psi-scale mass, the conservative boosted scale
+for AK2 is `2m/R` about 31 GeV, so the 20 GeV production threshold is below the
+target region.  Every output row stores `fj_jetR`, `run_no`, `lumi_no`, and the
+64-bit `event_no`.  `H_ggg` is assigned only when all three direct gluon
+daughters are contained within the selected jet radius; its class index
+immediately follows `H_gg`.
 
 The CRAB helper can create independent tasks and ROOT outputs for all radii in
 one command.  Task request names and output dataset tags receive an `AK2`
@@ -46,6 +49,7 @@ python crab.py \
   --set-input-dataset \
   -p ../test/DeepNtuplizerVR.py \
   --jet-radii 2 3 4 5 6 7 8 9 10 11 12 13 14 15 \
+  --jet-pt-min 20 \
   --site T2_CH_CERN \
   -o /store/user/$USER/DeepNtuples/VR-v1 \
   -t DeepNtuplesVR-v1 \
