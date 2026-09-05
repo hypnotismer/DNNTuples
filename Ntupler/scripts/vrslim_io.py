@@ -5,6 +5,7 @@ Requires Python 3, uproot >= 5, awkward >= 2, numpy. No CMSSW dependency.
 The default training interface is iter_jets(): expanded arrays exist only in RAM.
 """
 import argparse
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -16,6 +17,8 @@ import uproot
 EVENTS = 'vrslim/Events'
 JETS = 'vrslim/Jets'
 SCHEMA = 'vrslim/VRslimSchema'
+CONFIG = 'vrslim/VRslimConfig'
+SOURCE_INPUTS = 'vrslim/SourceInputs'
 INDEX = {'cpfcandlt_': 'cpf_indices', 'npfcand_': 'npf_indices', 'sv_': 'sv_indices'}
 INTERNAL = {'event_idx', 'radius_idx', 'jet_radius'} | set(INDEX.values())
 
@@ -38,11 +41,43 @@ def schema(tree):
 def check_schema(root):
     obj = root[SCHEMA]
     version = obj.member('fTitle') if obj.classname == 'TNamed' else str(obj)
-    if version != '1':
+    if version not in {'1', '2'}:
         raise ValueError('Unsupported VRslim schema: ' + version)
     for path in (EVENTS, JETS):
         if root[path].classname != 'TTree':
             raise ValueError(path + ' must be a TTree')
+    if version == '2':
+        if 'source_file_id' not in root[EVENTS]:
+            raise ValueError('VRslim schema 2 Events is missing source_file_id')
+        config_obj = root[CONFIG]
+        config = config_obj.member('fTitle') if config_obj.classname == 'TNamed' else str(config_obj)
+        try:
+            parsed = json.loads(config)
+        except (TypeError, json.JSONDecodeError) as error:
+            raise ValueError('VRslim schema 2 config is not valid JSON') from error
+        if parsed.get('schema') != 2:
+            raise ValueError('VRslim config/schema version mismatch')
+    return version
+
+
+def source_inputs(root):
+    """Return embedded input provenance, or None for raw/legacy files."""
+    if SOURCE_INPUTS not in root:
+        return None
+    obj = root[SOURCE_INPUTS]
+    text = obj.member('fTitle') if obj.classname == 'TNamed' else str(obj)
+    try:
+        records = json.loads(text)
+    except (TypeError, json.JSONDecodeError) as error:
+        raise ValueError('SourceInputs is not valid JSON') from error
+    if not isinstance(records, list) or any(
+            not isinstance(x, dict) or not isinstance(x.get('input'), str) or
+            not isinstance(x.get('source_file_id'), str) or
+            any(not isinstance(x.get(key), int)
+                for key in ('event_start', 'event_stop', 'events', 'jets'))
+            for x in records):
+        raise ValueError('SourceInputs must be a list of input/source_file_id records')
+    return records
 
 
 def _group(name):
@@ -114,7 +149,7 @@ def iter_jets(path, step_size=1024, include_internal=False):
 
 def validate(path, step_size=1024):
     with uproot.open(path) as root:
-        check_schema(root)
+        version = check_schema(root)
         event_count, jet_count = root[EVENTS].num_entries, root[JETS].num_entries
         expected = 0
         previous = None
@@ -135,6 +170,30 @@ def validate(path, step_size=1024):
                 radii[int(ir)] = r
         if expected != event_count:
             raise ValueError('Unreferenced Events entries')
+        records = source_inputs(root)
+        if version == '2' and records is not None:
+            recorded_values = [int(x['source_file_id']) for x in records]
+            if any(x < 0 or x >= 2**64 for x in recorded_values):
+                raise ValueError('SourceInputs source_file_id does not fit uint64')
+            if len(recorded_values) != len(set(recorded_values)):
+                raise ValueError('SourceInputs contains duplicate source_file_id values')
+            recorded = set(recorded_values)
+            present = set(map(int, ak.to_numpy(root[EVENTS]['source_file_id'].array())))
+            if not present <= recorded:
+                raise ValueError('SourceInputs does not match Events.source_file_id')
+            event_sources = ak.to_numpy(root[EVENTS]['source_file_id'].array())
+            jet_events = ak.to_numpy(root[JETS]['event_idx'].array())
+            cursor = 0
+            for record, source_id in zip(records, recorded_values):
+                start, stop = record['event_start'], record['event_stop']
+                if (start != cursor or stop < start or stop - start != record['events'] or
+                        stop > event_count or
+                        np.any(event_sources[start:stop] != np.uint64(source_id)) or
+                        int(np.sum((jet_events >= start) & (jet_events < stop))) != record['jets']):
+                    raise ValueError('SourceInputs event ranges/counts do not match the TTrees')
+                cursor = stop
+            if cursor != event_count:
+                raise ValueError('SourceInputs does not cover every Events entry')
         return {'events': event_count, 'jets': jet_count}
 
 
@@ -148,7 +207,7 @@ def _destination(output):
     return dest, Path(temporary)
 
 
-def merge(inputs, output, step_size=1024):
+def merge(inputs, output, step_size=1024, source_records=None):
     """Concatenate with file-local event_idx rebasing; no physics dedup by ID.
 
     Independent MC samples can reuse run/lumi/event, so equal IDs in distinct
@@ -162,19 +221,21 @@ def merge(inputs, output, step_size=1024):
         expected = None
         config = None
         with uproot.recreate(temporary, compression=uproot.LZ4(4)) as out:
-            out[SCHEMA] = '1'
+            schema_version = None
             for source in inputs:
                 validate(source, step_size)
                 with uproot.open(source) as root:
-                    cfg_obj = root['vrslim/VRslimConfig']
+                    current_version = check_schema(root)
+                    cfg_obj = root[CONFIG]
                     current_config = cfg_obj.member('fTitle') if cfg_obj.classname == 'TNamed' else str(cfg_obj)
                     current = {path: schema(root[path]) for path in (EVENTS, JETS)}
                     if expected is None:
-                        expected, config = current, current_config
-                        out['vrslim/VRslimConfig'] = config
+                        expected, config, schema_version = current, current_config, current_version
+                        out[SCHEMA] = schema_version
+                        out[CONFIG] = config
                         for path in (EVENTS, JETS):
                             out.mktree(path, expected[path])
-                    elif current != expected or current_config != config:
+                    elif current != expected or current_config != config or current_version != schema_version:
                         raise ValueError('Incompatible schema or reconstruction configuration: ' + str(source))
                     for path in (EVENTS, JETS):
                         for chunk in root[path].iterate(names(root[path]), step_size=step_size, library='ak', how=dict):
@@ -182,7 +243,15 @@ def merge(inputs, output, step_size=1024):
                                 chunk['event_idx'] = chunk['event_idx'] + np.uint64(event_offset)
                             out[path].extend(chunk)
                     event_offset += root[EVENTS].num_entries
-            out['vrslim/MergeInputs'] = '\n'.join(map(str, inputs))
+            if source_records is not None:
+                if schema_version != '2' or len(source_records) != len(inputs):
+                    raise ValueError('source_records requires one schema-2 record per merge input')
+                out[SOURCE_INPUTS] = json.dumps(source_records, ensure_ascii=False,
+                                                sort_keys=True, separators=(',', ':'))
+                merge_names = [x['input'] for x in source_records]
+            else:
+                merge_names = list(map(str, inputs))
+            out['vrslim/MergeInputs'] = '\n'.join(merge_names)
         counts = validate(temporary, step_size)
         # Atomic no-clobber publication on the destination filesystem.
         os.link(temporary, dest)

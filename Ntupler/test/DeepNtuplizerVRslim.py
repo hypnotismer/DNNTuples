@@ -2,7 +2,8 @@
 import FWCore.ParameterSet.Config as cms
 import json
 from FWCore.ParameterSet.VarParsing import VarParsing
-from DeepNTuples.Ntupler.vrslim_config import parse_radii, radius_label, validate_thresholds
+from DeepNTuples.Ntupler.vrslim_config import (parse_radii, radius_label, stable_source_id,
+                                               validate_thresholds)
 
 options = VarParsing('analysis')
 options.outputFile = 'output.root'
@@ -10,6 +11,7 @@ options.maxEvents = -1
 for name, default, kind, description in [
     ('jetRadii', ','.join(str(i / 10.) for i in range(1, 16)), 'string', 'Comma-separated physical R values'),
     ('inputDataset', '', 'string', 'Dataset description for era and truth flags'),
+    ('sourceFileId', 'auto', 'string', 'Driver-managed stable uint64 identity of the one input MiniAOD'),
     ('era', 'auto', 'string', 'auto, UL17 or UL18; auto infers from dataset and input names'),
     ('skipEvents', 0, 'int', 'Number of input events to skip'),
     ('jetPtMin', 200., 'float', 'Final raw jet pT threshold'),
@@ -25,6 +27,14 @@ options.parseArguments()
 radii = parse_radii(options.jetRadii)
 validate_thresholds(options.genJetPtMin, options.jetPreselectionPtMin, options.jetPtMin)
 description = ' '.join([options.inputDataset] + list(options.inputFiles))
+if len(options.inputFiles) != 1:
+    raise ValueError('VRslim schema 2 requires exactly one MiniAOD per cmsRun; use run_vrslim.py to combine inputs')
+if options.sourceFileId == 'auto':
+    source_file_id = stable_source_id(options.inputFiles[0])
+else:
+    source_file_id = int(options.sourceFileId)
+    if not 0 <= source_file_id < 2**64:
+        raise ValueError('sourceFileId must fit in uint64')
 era = options.era
 if era == 'auto':
     era = 'UL17' if ('UL17' in description or '2017/' in description) else (
@@ -69,7 +79,10 @@ task.add(process.puppi)
 process.vrSlimGenParticlesNoNu = genParticlesForJetsNoNu.clone(src='packedGenParticles')
 task.add(process.vrSlimGenParticlesNoNu)
 collections = []
+collection_metadata = []
 references = cms.Sequence()
+lower = description.lower()
+generators = [name for name in ('madgraph', 'pythia', 'herwig') if name in lower]
 for r in radii:
     token = radius_label(r)
     collection, label = 'ak' + token, 'AK' + token
@@ -91,13 +104,13 @@ for r in radii:
                              jetPtMin=options.jetPtMin, jetPtMax=-1., jetAbsEtaMax=-1.,
                              addLowLevel=True, bDiscriminators=cms.vstring(),
                              isTrainSample=options.isTrainSample, keepAllEvents=options.keepAllEvents)
-    lower = description.lower()
     cfg.isQCDSample = 'qcd' in lower
     cfg.isTTBarSample = 'tott' in lower or 'ttbar' in lower
     cfg.isHVV2DVarMassSample = '2dmesh' in lower
-    cfg.isPythia = 'pythia' in lower
-    cfg.isHerwig = 'herwig' in lower
-    cfg.isMadGraph = 'madgraph' in lower
+    cfg.isPythia = 'pythia' in generators
+    cfg.isHerwig = 'herwig' in generators
+    cfg.isMadGraph = 'madgraph' in generators
+    match_metadata = {}
     for variant in ['WithNu', 'WithNuSoftDrop', 'NoNu', 'NoNuSoftDrop']:
         name = 'vrSlim' + label + 'GenJets' + variant
         producer = ak8GenJets.clone(src='vrSlimGenParticlesNoNu' if 'NoNu' in variant else 'packedGenParticles',
@@ -117,20 +130,39 @@ for r in radii:
         setattr(process, name + 'Match', matcher)
         task.add(getattr(process, name + 'Match'))
         setattr(cfg, 'genJets' + variant + 'Match', cms.InputTag(name + 'Match'))
+        match_metadata[variant] = name + 'Match'
     collections.append(cms.PSet(**cfg.parameters_()))
+    collection_metadata.append({
+        'jetR': r,
+        'jetCollectionLabel': label,
+        'jets': 'packedPatJets%sPFPuppiSoftDrop' % label,
+        'genJetMatches': match_metadata,
+    })
     if options.writeReference:
         setattr(process, 'reference' + label, cfg)
         references += getattr(process, 'reference' + label)
 
 process.vrslim = cms.EDAnalyzer('VRFactorizedNtuplizer',
                                pfcands=cms.InputTag('packedPFCandidates'),
+                               sourceFileId=cms.uint64(source_file_id),
                                productionConfig=cms.string(json.dumps({
-                                   'schema': 1, 'radii': radii, 'globalTag': tags[era],
-                                   'thresholds': [options.genJetPtMin, options.jetPreselectionPtMin, options.jetPtMin],
+                                   'schema': 2, 'radii': radii, 'globalTag': tags[era],
+                                   'thresholds': {
+                                       'genJetPtMin': options.genJetPtMin,
+                                       'jetPreselectionPtMin': options.jetPreselectionPtMin,
+                                       'jetPtMin': options.jetPtMin,
+                                   },
                                    'isTrainSample': options.isTrainSample, 'keepAllEvents': options.keepAllEvents,
-                                   'collections': [c.dumpPython() for c in collections],
-                               }, sort_keys=True)),
+                                   'sampleFlags': {
+                                       'isQCD': bool(collections[0].isQCDSample.value()),
+                                       'isTTBar': bool(collections[0].isTTBarSample.value()),
+                                       'isHVV2DVarMass': bool(collections[0].isHVV2DVarMassSample.value()),
+                                       'generators': generators,
+                                   },
+                                   'collections': collection_metadata,
+                               }, sort_keys=True, separators=(',', ':'))),
                                collections=cms.VPSet(*collections))
 process.p = cms.Path(process.vrslim + references)
 process.p.associate(task)
-print('VRslim radii:', radii, 'era:', era, 'writeReference:', options.writeReference)
+print('VRslim radii:', radii, 'era:', era, 'inferred generators:', generators,
+      'sourceFileId:', source_file_id, 'writeReference:', options.writeReference)

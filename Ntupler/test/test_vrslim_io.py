@@ -1,4 +1,5 @@
 """Synthetic multi-file tests of the actual lossless reader/merger."""
+import json
 import sys
 from pathlib import Path
 
@@ -9,21 +10,24 @@ import uproot
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'python'))
-from vrslim_io import EVENTS, JETS, SCHEMA, iter_jets, merge, validate, compare_reference
-from vrslim_config import parse_radii, validate_thresholds
+from vrslim_io import (CONFIG, EVENTS, JETS, SCHEMA, SOURCE_INPUTS,
+                       compare_reference, iter_jets, merge, source_inputs,
+                       validate)
+from vrslim_config import parse_radii, source_name, stable_source_id, validate_thresholds
 
 
 def jagged(rows, dtype):
     return ak.values_astype(ak.Array(rows), dtype)
 
 
-def fixture(path, corrupt=False, config='same', empty=False):
+def fixture(path, corrupt=False, config='same', empty=False, source_id=101, schema_version=2):
     # Multiple jets at the same radius, shared objects across R, and an empty
     # neutral/SV collection in one event. Include signed zero in shared values.
     events = {
         'run_no': np.array([1, 1], np.uint32),
         'lumi_no': np.array([1, 1], np.uint32),
         'event_no': np.array([17, 18], np.uint64),
+        'source_file_id': np.array([source_id, source_id], np.uint64),
         'rho': np.array([3.25, 4.5], np.float32),
         'cpfcandlt_px': jagged([[10., -0., 3.], [4.]], np.float32),
         'cpfcandlt_isLostTrack': jagged([[0., 0., 1.], [0.]], np.float32),
@@ -49,8 +53,8 @@ def fixture(path, corrupt=False, config='same', empty=False):
     if corrupt:
         jets['event_idx'][-1] = 4
     with uproot.recreate(path) as root:
-        root[SCHEMA] = '1'
-        root['vrslim/VRslimConfig'] = config
+        root[SCHEMA] = str(schema_version)
+        root[CONFIG] = json.dumps({'schema': schema_version, 'configuration': config})
         for name, values in [(EVENTS, events), (JETS, jets)]:
             root.mktree(name, {k: ak.type(v).content for k, v in values.items()})
             if not empty:
@@ -73,12 +77,13 @@ def test_gather_keeps_order_bits_and_associations(tmp_path):
 
 def test_merge_rebases_without_collapsing_reused_mc_ids(tmp_path):
     a, b, empty, out = [tmp_path / n for n in ['a.root', 'b.root', 'empty.root', 'out.root']]
-    fixture(a)
-    fixture(b)  # Deliberately identical run/lumi/event in a different input.
+    fixture(a, source_id=101)
+    fixture(b, source_id=202)  # Deliberately identical run/lumi/event in a different input.
     fixture(empty, empty=True)
     assert merge([empty, a, b], out, 2) == {'events': 4, 'jets': 8}
     with uproot.open(out) as root:
         assert ak.to_list(root[JETS]['event_idx'].array()) == [0, 0, 0, 1, 2, 2, 2, 3]
+        assert ak.to_list(root[EVENTS]['source_file_id'].array()) == [101, 101, 202, 202]
         assert root[JETS]['jet_radius'].interpretation.numpy_dtype == np.dtype('float64')
     before = [x for p in (a, b) for x in iter_jets(p, 2)]
     after = list(iter_jets(out, 2))
@@ -126,6 +131,11 @@ def test_arbitrary_radius_and_threshold_validation():
     for values in [(170., 100., 200.), (100., 170., float('nan'))]:
         with pytest.raises(ValueError):
             validate_thresholds(*values)
+    assert stable_source_id('file:miniv2_1.root') == stable_source_id('file:miniv2_1.root')
+    assert stable_source_id('file:/pool/a/miniv2_1.root') == stable_source_id(
+        'root://server//store/b/miniv2_1.root')
+    assert stable_source_id('file:miniv2_1.root') != stable_source_id('file:miniv2_2.root')
+    assert source_name('file:/pool/a/miniv2_14998563-1760.root') == 'miniv2_14998563-1760.root'
 
 
 @pytest.mark.parametrize('damage', ['index', 'association', 'identity'])
@@ -139,7 +149,8 @@ def test_corrupt_relation_rejected(tmp_path, damage):
     else:
         jets['event_no'][0] = 999
     with uproot.recreate(path) as root:
-        root[SCHEMA] = '1'
+        root[SCHEMA] = '2'
+        root[CONFIG] = json.dumps({'schema': 2, 'configuration': 'same'})
         for name, values in [(EVENTS, events), (JETS, jets)]:
             root.mktree(name, {k: ak.type(v).content for k, v in values.items()})
             root[name].extend(values)
@@ -155,7 +166,6 @@ def test_all_empty_merge(tmp_path):
 
 
 def test_driver_retries_then_merges_and_cleans_scratch(tmp_path, monkeypatch):
-    import json
     import types
     import run_vrslim
     output = tmp_path / 'job.root'
@@ -169,7 +179,9 @@ def test_driver_retries_then_merges_and_cleans_scratch(tmp_path, monkeypatch):
         if attempts[product] == 1:
             kwargs['stdout'].write('Transient simulated failure\n')
             return types.SimpleNamespace(returncode=1)
-        fixture(product)
+        source_id = int(next(x.split('=', 1)[1] for x in command
+                             if x.startswith('sourceFileId=')))
+        fixture(product, source_id=source_id)
         products.append(product)
         return types.SimpleNamespace(returncode=0)
 
@@ -181,7 +193,11 @@ def test_driver_retries_then_merges_and_cleans_scratch(tmp_path, monkeypatch):
     assert list(attempts.values()) == [2, 2]
     assert all(not p.exists() for p in products)
     manifest = json.loads(output.with_name('job.root.inputs.json').read_text())
-    assert manifest['inputs'] == ['file:a.root', 'file:b.root']
+    assert [x['input'] for x in manifest['inputs']] == ['file:a.root', 'file:b.root']
+    assert [x['event_start'] for x in manifest['inputs']] == [0, 2]
+    with uproot.open(output) as root:
+        assert source_inputs(root) == manifest['inputs']
+        assert str(root['vrslim/MergeInputs']) == 'file:a.root\nfile:b.root'
 
 
 def test_driver_failure_does_not_publish_partial_job(tmp_path, monkeypatch):

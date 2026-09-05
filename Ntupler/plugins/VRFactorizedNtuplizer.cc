@@ -71,6 +71,7 @@ class VRFactorizedNtuplizer : public edm::one::EDAnalyzer<edm::one::SharedResour
   TreeData eventData_, jetData_;
   TreeWriter *events_ = nullptr, *jets_ = nullptr; // TFileService owns trees
   unsigned long long eventIndex_ = 0;
+  unsigned long long sourceFileId_ = 0;
   std::string productionConfig_;
   std::array<std::map<reco::CandidatePtr, unsigned>, 2> candidateMaps_;
   std::map<unsigned, unsigned> svMap_;
@@ -80,6 +81,7 @@ public:
   explicit VRFactorizedNtuplizer(const edm::ParameterSet& config) {
     usesResource(TFileService::kSharedResource);
     candidates_ = consumes<reco::CandidateView>(config.getParameter<edm::InputTag>("pfcands"));
+    sourceFileId_ = config.getParameter<unsigned long long>("sourceFileId");
     const auto configs = config.getParameter<std::vector<edm::ParameterSet>>("collections");
     productionConfig_ = config.getParameter<std::string>("productionConfig");
     if (configs.empty()) throw cms::Exception("VRslim") << "No radii configured";
@@ -115,7 +117,7 @@ public:
     fs->file().SetCompressionLevel(4);
     events_ = new TreeWriter(fs->make<TTree>("Events", "Shared event objects"), "Events");
     jets_ = new TreeWriter(fs->make<TTree>("Jets", "All selected radii"), "Jets");
-    fs->make<TNamed>("VRslimSchema", "1");
+    fs->make<TNamed>("VRslimSchema", "2");
     fs->make<TNamed>("VRslimConfig", productionConfig_.c_str());
     for (const auto& filler : radii_.front().fillers) {
       for (const auto& entry : filler->treeData().variables()) {
@@ -133,6 +135,7 @@ public:
     eventData_.add<unsigned>("run_no", 0);
     eventData_.add<unsigned>("lumi_no", 0);
     eventData_.add<unsigned long long>("event_no", 0);
+    eventData_.add<unsigned long long>("source_file_id", sourceFileId_);
     for (const auto& name : indexNames_) jetData_.addMulti<unsigned>(name);
     jetData_.add<unsigned long long>("event_idx", 0);
     jetData_.add<unsigned>("radius_idx", 0);
@@ -154,6 +157,7 @@ public:
     eventData_.fill<unsigned>("run_no", event.id().run());
     eventData_.fill<unsigned>("lumi_no", event.id().luminosityBlock());
     eventData_.fill<unsigned long long>("event_no", event.id().event());
+    eventData_.fill<unsigned long long>("source_file_id", sourceFileId_);
     for (auto& m : candidateMaps_) m.clear();
     svMap_.clear();
     bool selected = false;

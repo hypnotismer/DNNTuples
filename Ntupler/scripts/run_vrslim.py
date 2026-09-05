@@ -11,6 +11,10 @@ import subprocess
 import tempfile
 
 from vrslim_io import merge, validate
+try:
+    from DeepNTuples.Ntupler.vrslim_config import source_name, stable_source_id
+except ImportError:
+    from vrslim_config import source_name, stable_source_id
 
 
 def main():
@@ -19,14 +23,23 @@ def main():
     parser.add_argument('--output', required=True, help='Local final ROOT; existing files are never overwritten')
     parser.add_argument('--config', default=str(Path(__file__).resolve().parents[1] / 'test' / 'DeepNtuplizerVRslim.py'))
     parser.add_argument('--retries', type=int, default=5)
-    parser.add_argument('cmsrun_args', nargs='*', help='e.g. era=UL17 jetRadii=0.1,0.2,0.8,1.5')
+    parser.add_argument('cmsrun_args', nargs='*',
+                        help='e.g. era=UL17 jetRadii=0.1,0.2,0.8,1.5')
     args = parser.parse_args()
     inputs = [x.strip() for x in args.input_files.split(',')]
     if any(not x for x in inputs) or len(set(inputs)) != len(inputs) or args.retries < 1:
         parser.error('Inputs must be distinct and nonempty; retries must be positive')
     for value in args.cmsrun_args:
-        if value.split('=', 1)[0] in {'inputFiles', 'outputFile', 'writeReference'}:
-            parser.error('Driver manages inputFiles/outputFile/writeReference')
+        if value.split('=', 1)[0] in {'inputFiles', 'outputFile', 'writeReference', 'sourceFileId'}:
+            parser.error('Driver manages inputFiles/outputFile/writeReference/sourceFileId')
+    resolved_inputs = []
+    for source in inputs:
+        if source.startswith('file:') and not source.startswith('file:/'):
+            source = 'file:' + str(Path(source[5:]).resolve())
+        resolved_inputs.append(source)
+    source_ids = [stable_source_id(source) for source in resolved_inputs]
+    if len(set(source_ids)) != len(source_ids):
+        parser.error('Input source identifiers collide; inputs must have distinct stable identities')
     config = Path(args.config).resolve()
     output = Path(args.output).resolve()
     manifest = output.with_name(output.name + '.inputs.json')
@@ -36,14 +49,15 @@ def main():
     # These are task-owned temporary files only; cleanup never touches inputs.
     with tempfile.TemporaryDirectory(prefix='vrslim-', dir=output.parent) as scratch:
         products = []
-        for i, source in enumerate(inputs):
-            # Relative local file inputs must not change meaning in the scratch cwd.
-            if source.startswith('file:') and not source.startswith('file:/'):
-                source = 'file:' + str(Path(source[5:]).resolve())
+        source_records = []
+        event_offset = 0
+        for i, (original_source, source, source_id) in enumerate(
+                zip(inputs, resolved_inputs, source_ids)):
             product = Path(scratch) / ('raw%d.root' % i)
             log = Path(scratch) / ('raw%d.log' % i)
             command = ['cmsRun', str(config), 'inputFiles=' + source,
-                       'outputFile=' + str(product), 'writeReference=False'] + args.cmsrun_args
+                       'outputFile=' + str(product), 'writeReference=False',
+                       'sourceFileId=' + str(source_id)] + args.cmsrun_args
             for attempt in range(args.retries):
                 product.unlink(missing_ok=True)
                 print('Input %d/%d, attempt %d: %s' % (i + 1, len(inputs), attempt + 1, source), flush=True)
@@ -52,7 +66,7 @@ def main():
                 try:
                     if result.returncode:
                         raise RuntimeError('cmsRun exit code %d' % result.returncode)
-                    validate(product)
+                    input_counts = validate(product)
                     break
                 except Exception:
                     if attempt + 1 == args.retries:
@@ -64,11 +78,23 @@ def main():
                             print('Failure log:', dest.name, flush=True)
                         raise
             products.append(product)
-        counts = merge(products, output)
+            source_records.append({
+                'input': original_source,
+                'source_uri': source,
+                'source_name': source_name(source),
+                'source_file_id': str(source_id),
+                'event_start': event_offset,
+                'event_stop': event_offset + input_counts['events'],
+                'events': input_counts['events'],
+                'jets': input_counts['jets'],
+            })
+            event_offset += input_counts['events']
+        counts = merge(products, output, source_records=source_records)
     # Manifest preserves original input provenance; do not rely on MC event IDs
     # being unique across separate generated samples.
     with manifest.open('x') as stream:
-        json.dump({'inputs': inputs, 'cmsrun_args': args.cmsrun_args, 'counts': counts}, stream, indent=2)
+        json.dump({'inputs': source_records, 'cmsrun_args': args.cmsrun_args,
+                   'counts': counts}, stream, indent=2)
     print(counts)
 
 

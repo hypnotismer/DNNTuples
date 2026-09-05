@@ -10,10 +10,10 @@ cd CMSSW_10_6_30/src
 cmsenv
 
 # use an updated onnxruntime package
-bash <(curl -s https://raw.githubusercontent.com/hypnotismer/DNNTuples/dev-UL-VR/Ntupler/scripts/install_onnxruntime.sh)
+bash <(curl -s https://raw.githubusercontent.com/hypnotismer/DNNTuples/dev-UL-VRslim/Ntupler/scripts/install_onnxruntime.sh)
 
 # clone this repo into "DeepNTuples" directory
-git clone git@github.com:hypnotismer/DNNTuples.git DeepNTuples -b dev-UL-VR
+git clone git@github.com:hypnotismer/DNNTuples.git DeepNTuples -b dev-UL-VRslim
 
 scram b -j8
 ```

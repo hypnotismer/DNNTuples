@@ -21,9 +21,17 @@ cmsRun Ntupler/test/DeepNtuplizerVRslim.py \
 Default radii: 0.1, 0.2, ..., 1.5. Any list of positive finite physical radii is
 supported; duplicate radii and collisions in normalized CMSSW labels are
 rejected. Explicitly set `era=UL17` for private files with generic names.
-`inputDataset` supplies the existing sample flags if filenames do not identify
-QCD, ttbar, 2dmesh, Pythia, Herwig or MadGraph. Input lists in one production
-group must have compatible sample flags and era.
+Generator observer flags retain the legacy best-effort behavior: they are set
+only when `inputDataset` or the input path contains Pythia, Herwig or MadGraph.
+Generic staged names such as `miniv2_14998563-1760.root` therefore leave these
+unused observer flags at zero and do not block production. `inputDataset` also
+supplies the existing QCD, ttbar and 2dmesh sample flags when filenames do not
+identify them. Input lists in one production group must have compatible sample
+flags and era.
+
+Schema 2 processes exactly one MiniAOD per `cmsRun`, so that every retained
+event has an unambiguous source identity. Use `run_vrslim.py` for multi-input
+jobs; it invokes cmsRun separately for every input before the lossless merge.
 
 There is one PUPPI producer per process. Each configured R has its own reco
 jets, SoftDrop/subjets, tau1–3, truth matching and gen jets with/without neutrinos
@@ -33,13 +41,14 @@ truth/selection logic, including the ggg label, is inherited from the fillers.
 No fixed jet-count cap or additional per-candidate truncation is introduced.
 All R are static CMSSW modules, executed for every event, not randomly routed.
 
-## ROOT layout (schema 1)
+## ROOT layout (schema 2)
 
 The ROOT contains `vrslim/Events` and `vrslim/Jets` TTrees. Events with no selected
 jets at any R are omitted. Each retained event is one Events entry. Jets are
 written in event order, then configured radius order, then original jet order.
 
-Events stores `run_no/lumi_no/event_no`, `npv/rho/ntrueInt`, and all invariant
+Events stores `run_no/lumi_no/event_no`, `source_file_id`, `npv/rho/ntrueInt`,
+and all invariant
 `cpfcandlt_*`, `npfcand_*`, `sv_*` arrays. Arrays contain only the union of objects
 used by selected jets. Charged PF and lost tracks share the charged table, but
 deduplication uses the full EDM pointer (ProductID and key). SVs use the index
@@ -70,8 +79,19 @@ verbatim once. This avoids round-off changes from reconstructing them later.
 Every repeated shared value is compared bitwise by the writer; a disagreement
 aborts production rather than silently replacing a value.
 
-`vrslim/VRslimSchema` records version 1 and `vrslim/VRslimConfig` records radii,
-thresholds, global tag, sample flags and per-radius filler configuration.
+`source_file_id` is the first 64 bits of SHA-256 over the MiniAOD basename. For
+names such as `miniv2_14998563-1760.root`, the cluster/task pair therefore
+remains stable when the file moves between storage locations. Duplicate
+basenames in one production group are rejected. This distinguishes independent
+private-MC files that reuse the
+same run/lumi/event numbers. The final ROOT embeds `vrslim/SourceInputs`, a
+valid JSON mapping from every source ID to its original MiniAOD name, event
+range and counts. The sidecar manifest contains the same mapping.
+
+`vrslim/VRslimSchema` records version 2 and `vrslim/VRslimConfig` is valid JSON
+containing radii, named thresholds, global tag, sample/generator flags and a
+compact per-radius collection description. Schema-1 files remain readable but
+cannot be merged with schema 2.
 
 Two inherited indexing defects are fixed in this branch: the nested-subjet
 path now uses the leaf candidate key, and lost-track detection uses the full
@@ -109,10 +129,10 @@ modified here. Keep the existing label mapping synchronized with the ggg label
 in dev-UL-VR; an older AK8 YAML may contain hard-coded obsolete label offsets.
 
 All jets/radii of the same source event must go to the same train/validation/test
-split. Independent generated samples may reuse run/lumi/event; include source
-dataset/file provenance when assigning splits. Do not treat equal numeric IDs
-in separate MiniAODs as a reason to deduplicate their events. File-local
-event_idx is a storage coordinate, not a globally unique event identifier.
+split. Use `source_file_id` together with run/lumi/event when assigning splits.
+Do not treat equal numeric IDs in separate MiniAODs as a reason to deduplicate
+their events. File-local event_idx is a storage coordinate, not a globally
+unique event identifier.
 
 ## Existing 100-input Condor job pattern
 
@@ -122,7 +142,8 @@ Initialize CMSSW as before, then replace the old per-file loop and `hadd` with:
 ```bash
 python3 Ntupler/scripts/run_vrslim.py \
   --input-files "$INPUTFILES" --output dnntuple.root \
-  era=UL17 jetRadii=0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5
+  era=UL17 \
+  jetRadii=0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5
 ```
 
 Use a Python 3 environment with the dependencies above while keeping `cmsRun`
@@ -131,7 +152,9 @@ separately, retries up to five times, validates each result, and finally rebases
 event_idx while merging. It publishes the final file only after validation.
 Temporary per-input ROOTs are cleaned up; input MiniAODs are never modified.
 On terminal failure it preserves the failed cmsRun log beside the requested
-output. The `.inputs.json` manifest must be transferred alongside the ROOT.
+output. The `.inputs.json` manifest should still be transferred alongside the
+ROOT, but the same provenance mapping is embedded in `vrslim/SourceInputs`, so
+a missing sidecar no longer loses the original MiniAOD identities.
 The new entry point always enables low-level output; omit the old
 `addLowLevel=1` command-line argument when adapting an existing JDL.
 The driver uses local paths for final output; keep the existing external
