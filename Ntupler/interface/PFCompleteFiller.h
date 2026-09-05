@@ -30,6 +30,9 @@ public:
   // read event content or event setup for each event
   virtual void readEvent(const edm::Event& iEvent, const edm::EventSetup& iSetup) override;
 
+  const std::vector<reco::CandidatePtr>& chargedPointers() const { return chargedPointers_; }
+  const std::vector<reco::CandidatePtr>& neutralPointers() const { return neutralPointers_; }
+
 protected:
   // declare the data branches (name, type, default values)
   virtual void book() override;
@@ -37,6 +40,7 @@ protected:
   virtual bool fill(const pat::Jet &jet, size_t jetidx, const JetHelper &jet_helper) override;
 
 private:
+  std::vector<reco::CandidatePtr> chargedPointers_, neutralPointers_;
   edm::ESGetToken<TransientTrackBuilder, TransientTrackRecord> transientTrackBuilderToken_;
 
   edm::EDGetTokenT<reco::VertexCollection> vtxToken_;

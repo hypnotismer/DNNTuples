@@ -1,10 +1,13 @@
 *.*~
 *.log
 *.txt
+!Ntupler/scripts/requirements-vrslim.txt
 *.out
 *.root
 #*.*#
 *.pyc
+.pytest_cache/
+__pycache__/
 __init__.py
 .DS_Store
 

@@ -1,5 +1,8 @@
 # DNNTuplesAK8
 
+For the lossless multi-R `dev-UL-VRslim` production entry point, shared
+Events/Jets format, reader and merger, see [VRSLIM.md](VRSLIM.md).
+
 ## Setup
 ```bash
 cmsrel CMSSW_10_6_30

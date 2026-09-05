@@ -57,6 +57,7 @@ def jetToolbox( proc, jetType, jetSequence, outputFile,
 		addEnergyCorrFuncSubjets=False, ecfSubjetType = "N", ecfSubjetBeta = 1.0, ecfSubjetN3 = False,
 		verbosity=2, 	# 0 = no printouts, 1 = warnings only, 2 = warnings & info, 3 = warnings, info, debug
 		jetRadius=None, # explicit physical R; keeps the legacy name-derived R when omitted
+		puppiCollection='', # reuse one preconfigured PUPPI product across radii
 		):
 
 
@@ -255,7 +256,11 @@ def jetToolbox( proc, jetType, jetSequence, outputFile,
 		tmpPfCandName = pfCand.lower()
 		mod["PFJets"] = ""
 		if 'Puppi' in PUMethod:
-			if ('puppi' in tmpPfCandName):
+			if puppiCollection:
+				if not hasattr(proc, puppiCollection):
+					raise ValueError('Missing shared PUPPI producer: ' + puppiCollection)
+				srcForPFJets = puppiCollection
+			elif ('puppi' in tmpPfCandName):
 				srcForPFJets = pfCand
 				if verbosity>=1: print('|---- jetToolBox: Not running puppi algorithm because keyword puppi was specified in nameNewPFCollection, but applying puppi corrections.')
 			else:
@@ -1466,4 +1471,12 @@ def jetToolbox( proc, jetType, jetSequence, outputFile,
 #### Taken from: https://github.com/hqucms/NanoHRT/blob/master/python/jetToolbox_cff.py
 def _addProcessAndTask(proc, label, module):
     task = getPatAlgosToolsTask(proc)
+    # Reuse this shared input across radii. Other labels intentionally replace
+    # default PAT selectors later in jetToolbox (e.g. to install the pT cut).
+    if label == 'packedGenParticlesForJetsNoNu' and hasattr(proc, label):
+        existing = getattr(proc, label)
+        if existing is module or existing.dumpPython() == module.dumpPython():
+            task.add(existing)
+            return
+        raise ValueError('jetToolbox: conflicting definitions for ' + label)
     addToProcessAndTask(label, module, proc, task)

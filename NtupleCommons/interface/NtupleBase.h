@@ -41,6 +41,9 @@ public:
   virtual void readEvent(const edm::Event& iEvent, const edm::EventSetup& iSetup) {}
 
   // register the data branches to the tree
+  // Book in-memory variables without creating a redundant per-radius TTree.
+  void initData() { book(); }
+
   void initBranches(TreeWriter *tw) {
     book();
     data.book(tw);

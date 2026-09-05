@@ -83,6 +83,9 @@ bool SVFiller::fill(const pat::Jet& jet, size_t jetidx, const JetHelper& jet_hel
 
   float etasign = jet.eta()>0 ? 1 : -1;
 
+  sourceIndices_.clear();
+  for (const auto *sv : jetSVs) sourceIndices_.push_back(sv - &SVs->front());
+
   for (const auto *sv : jetSVs){
     // basic kinematics
     data.fillMulti<float>("sv_ptrel", sv->pt() / jet.pt());

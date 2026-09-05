@@ -25,6 +25,8 @@ public:
   // read event content or event setup for each event
   virtual void readEvent(const edm::Event& iEvent, const edm::EventSetup& iSetup) override;
 
+  const std::vector<unsigned>& sourceIndices() const { return sourceIndices_; }
+
 protected:
   // declare the data branches (name, type, default values)
   virtual void book() override;
@@ -32,6 +34,7 @@ protected:
   virtual bool fill(const pat::Jet &jet, size_t jetidx, const JetHelper &jet_helper) override;
 
 private:
+  std::vector<unsigned> sourceIndices_;
   edm::EDGetTokenT<reco::VertexCollection> vtxToken_;
   edm::EDGetTokenT<reco::VertexCompositePtrCandidateCollection> svToken_;
 

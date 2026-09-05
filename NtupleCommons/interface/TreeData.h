@@ -71,6 +71,8 @@ public:
 
   void setIsRead(bool isread = true) { isRead = isread; }
 
+  const std::map<std::string, AbstractTreeVar*>& variables() const { return data; }
+
   template<typename Type>
   void add(std::string name, const Type defaultValue){
     assert(isRead || !isBooked);

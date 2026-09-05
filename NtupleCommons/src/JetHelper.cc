@@ -47,16 +47,20 @@ void JetHelper::initializeConstituents(const edm::Handle<reco::CandidateView> &p
       for (unsigned k=0; k<sj->numberOfDaughters(); ++k){
         const auto& candPtr = sj->daughterPtr(k);
         const auto *cand = dynamic_cast<const pat::PackedCandidate*>(&(*candPtr));
+        if (!cand || candPtr.key() >= pfcands->size())
+          throw cms::Exception("JetHelper") << "Invalid leaf packed candidate reference";
         if (cand->puppiWeight() < 0.01) continue; // [94X] ignore particles w/ extremely low puppi weights
         // Here we get the original PackedCandidate as stored in MiniAOD (i.e., not puppi weighted)
         // https://github.com/cms-sw/cmssw/pull/28035
-        daughters_.push_back(pfcands->ptrAt(dauPtr.key()));
+        daughters_.push_back(pfcands->ptrAt(candPtr.key()));
         // For the Puppi weight, we get it from the new candidate in case it is recomputed
-        puppi_wgt_cache_[dauPtr.key()] = cand->puppiWeight();
+        puppi_wgt_cache_[candPtr.key()] = cand->puppiWeight();
       }
     }else{
       const auto& candPtr = dauPtr;
       const auto *cand = dynamic_cast<const pat::PackedCandidate*>(&(*candPtr));
+      if (!cand || candPtr.key() >= pfcands->size())
+        throw cms::Exception("JetHelper") << "Invalid packed candidate reference";
       if (cand->puppiWeight() < 0.01) continue; // [94X] ignore particles w/ extremely low puppi weights
       // Here we get the original PackedCandidate as stored in MiniAOD (i.e., not puppi weighted)
       // https://github.com/cms-sw/cmssw/pull/28035
