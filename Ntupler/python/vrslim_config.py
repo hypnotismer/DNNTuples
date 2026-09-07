@@ -1,7 +1,7 @@
 """Pure-Python validation shared by CMSSW configuration and local tests."""
 import hashlib
 import math
-from urllib.parse import urlsplit
+import struct
 
 
 def radius_label(radius):
@@ -27,7 +27,13 @@ def validate_thresholds(gen, reco, final):
 
 def source_name(source):
     """Return the location-independent MiniAOD basename from a path or URI."""
-    name = urlsplit(source).path.rstrip('/').rsplit('/', 1)[-1]
+    # Keep this module importable by the Python 2.7 cmsRun in CMSSW_10_6.
+    # Query/fragment removal is sufficient here because only the final path
+    # component is used; avoid urllib.parse, which exists only in Python 3.
+    path = source.split('#', 1)[0].split('?', 1)[0]
+    if path.startswith('file:'):
+        path = path[5:]
+    name = path.rstrip('/').rsplit('/', 1)[-1]
     if not name:
         raise ValueError('Input MiniAOD URI has no filename: ' + source)
     return name
@@ -36,4 +42,6 @@ def source_name(source):
 def stable_source_id(source):
     """Return a reproducible uint64 identity for one MiniAOD basename."""
     digest = hashlib.sha256(source_name(source).encode('utf-8')).digest()
-    return int.from_bytes(digest[:8], byteorder='big', signed=False)
+    # struct.unpack is available in both Python 2.7 and Python 3 and gives the
+    # same big-endian uint64 definition as int.from_bytes(..., 'big').
+    return struct.unpack('>Q', digest[:8])[0]

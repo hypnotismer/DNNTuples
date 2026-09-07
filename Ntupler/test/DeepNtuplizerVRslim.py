@@ -1,9 +1,16 @@
 """Multi-R PUPPI reconstruction with lossless Events/Jets output (CMSSW 10_6)."""
+from __future__ import print_function
+
 import FWCore.ParameterSet.Config as cms
 import json
 from FWCore.ParameterSet.VarParsing import VarParsing
 from DeepNTuples.Ntupler.vrslim_config import (parse_radii, radius_label, stable_source_id,
                                                validate_thresholds)
+
+try:
+    integer_type = long
+except NameError:
+    integer_type = int
 
 options = VarParsing('analysis')
 options.outputFile = 'output.root'
@@ -32,7 +39,7 @@ if len(options.inputFiles) != 1:
 if options.sourceFileId == 'auto':
     source_file_id = stable_source_id(options.inputFiles[0])
 else:
-    source_file_id = int(options.sourceFileId)
+    source_file_id = integer_type(options.sourceFileId)
     if not 0 <= source_file_id < 2**64:
         raise ValueError('sourceFileId must fit in uint64')
 era = options.era
@@ -164,5 +171,6 @@ process.vrslim = cms.EDAnalyzer('VRFactorizedNtuplizer',
                                collections=cms.VPSet(*collections))
 process.p = cms.Path(process.vrslim + references)
 process.p.associate(task)
-print('VRslim radii:', radii, 'era:', era, 'inferred generators:', generators,
-      'sourceFileId:', source_file_id, 'writeReference:', options.writeReference)
+print('VRslim radii: %s era: %s inferred generators: %s sourceFileId: %s '
+      'writeReference: %s' %
+      (radii, era, generators, source_file_id, options.writeReference))
