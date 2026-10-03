@@ -132,8 +132,8 @@ def test_arbitrary_radius_and_threshold_validation():
         with pytest.raises(ValueError):
             validate_thresholds(*values)
     assert stable_source_id('file:miniv2_1.root') == stable_source_id('file:miniv2_1.root')
-    assert stable_source_id('file:/pool/a/miniv2_1.root') == stable_source_id(
-        'root://server//store/b/miniv2_1.root')
+    assert stable_source_id('root://server-a//store/b/miniv2_1.root') == stable_source_id(
+        'root://server-b//store/b/miniv2_1.root?token=ignored')
     assert stable_source_id('file:miniv2_1.root') != stable_source_id('file:miniv2_2.root')
     assert source_name('file:/pool/a/miniv2_14998563-1760.root') == 'miniv2_14998563-1760.root'
 
@@ -165,7 +165,12 @@ def test_all_empty_merge(tmp_path):
     assert list(iter_jets(output)) == []
 
 
-def test_driver_retries_then_merges_and_cleans_scratch(tmp_path, monkeypatch):
+@pytest.mark.parametrize('inputs', [
+    'file:a.root,file:b.root',
+    'root://server//store/part1/miniv2_50.root,root://server//store/part2/miniv2_50.root',
+    'root://server//store/part1/miniv2_806.root,root://server//store/part2/miniv2_806.root',
+])
+def test_driver_retries_then_merges_and_cleans_scratch(tmp_path, monkeypatch, inputs):
     import types
     import run_vrslim
     output = tmp_path / 'job.root'
@@ -186,18 +191,23 @@ def test_driver_retries_then_merges_and_cleans_scratch(tmp_path, monkeypatch):
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(run_vrslim.subprocess, 'run', fake_cmsrun)
-    monkeypatch.setattr(sys, 'argv', ['run_vrslim.py', '--input-files', 'file:a.root,file:b.root',
+    monkeypatch.setattr(sys, 'argv', ['run_vrslim.py', '--input-files', inputs,
                                     '--output', str(output), '--retries', '2', 'era=UL17'])
     run_vrslim.main()
     assert validate(output) == {'events': 4, 'jets': 8}
     assert list(attempts.values()) == [2, 2]
     assert all(not p.exists() for p in products)
     manifest = json.loads(output.with_name('job.root.inputs.json').read_text())
-    assert [x['input'] for x in manifest['inputs']] == ['file:a.root', 'file:b.root']
+    assert [x['input'] for x in manifest['inputs']] == inputs.split(',')
     assert [x['event_start'] for x in manifest['inputs']] == [0, 2]
+    assert set(manifest) == {'inputs', 'cmsrun_args', 'counts'}
+    assert all(set(x) == {'input', 'source_uri', 'source_name', 'source_file_id',
+                          'event_start', 'event_stop', 'events', 'jets'}
+               for x in manifest['inputs'])
+    assert len({x['source_file_id'] for x in manifest['inputs']}) == 2
     with uproot.open(output) as root:
         assert source_inputs(root) == manifest['inputs']
-        assert str(root['vrslim/MergeInputs']) == 'file:a.root\nfile:b.root'
+        assert str(root['vrslim/MergeInputs']) == '\n'.join(inputs.split(','))
 
 
 def test_driver_failure_does_not_publish_partial_job(tmp_path, monkeypatch):
@@ -217,3 +227,71 @@ def test_driver_failure_does_not_publish_partial_job(tmp_path, monkeypatch):
     assert not output.exists()
     logs = list(tmp_path.glob('failed.root.failed.*.log'))
     assert len(logs) == 1 and 'Terminal simulated failure' in logs[0].read_text()
+
+
+@pytest.mark.parametrize('with_records', [False, True])
+def test_merge_registers_metadata_before_large_file_baskets(tmp_path, monkeypatch, with_records):
+    # A sparse hole exercises real 64-bit ROOT offsets without writing 2 GiB.
+    a, b, output = [tmp_path / n for n in ('a.root', 'b.root', 'large.root')]
+    fixture(a, source_id=101)
+    fixture(b, source_id=202)
+    records = [dict(input=str(path), source_file_id=str(source), event_start=start,
+                    event_stop=start + 2, events=2, jets=4)
+               for path, source, start in ((a, 101, 0), (b, 202, 2))]
+    original = uproot.writing.writable.WritableDirectory.mktree
+    injected = []
+
+    def mktree_after_sparse_hole(directory, name, *args, **kwargs):
+        tree = original(directory, name, *args, **kwargs)
+        if name == JETS and not injected:
+            fs = directory.file._cascading.freesegments
+            fs._data.slices = ()
+            fs._data.end = 2**31 + 4096
+            injected.append(True)
+        return tree
+
+    monkeypatch.setattr(uproot.writing.writable.WritableDirectory, 'mktree', mktree_after_sparse_hole)
+    assert merge([a, b], output, step_size=2,
+                 source_records=records if with_records else None) == {'events': 4, 'jets': 8}
+    assert injected and output.stat().st_size > 2**31
+    assert output.stat().st_blocks * 512 < 1024**2
+    with uproot.open(output) as root:
+        assert ak.to_list(root[JETS]['event_idx'].array()) == [0, 0, 0, 1, 2, 2, 2, 3]
+        assert str(root['vrslim/MergeInputs']) == str(a) + '\n' + str(b)
+        assert source_inputs(root) == (records if with_records else None)
+
+
+@pytest.mark.parametrize('basename', ['miniv2_50.root', 'miniv2_806.root'])
+def test_input_identity_distinguishes_directories_and_ignores_redirectors(basename):
+    a = 'root://server-a//store/part1/' + basename
+    b = 'root://server-a//store/part2/' + basename
+    assert source_name(a) == source_name(b)
+    assert stable_source_id(a) != stable_source_id(b)
+    assert stable_source_id(a) == stable_source_id(a.replace('server-a', 'server-b'))
+
+
+def test_ten_independent_inputs_with_reused_event_numbers_preserve_sources(tmp_path):
+    inputs, records = [], []
+    for i in range(10):
+        uri = 'root://server//store/task%d/miniv2_50.root' % i
+        path = tmp_path / ('raw%d.root' % i)
+        sid = stable_source_id(uri)
+        fixture(path, source_id=sid)  # Same run/lumi/event values in every source.
+        inputs.append(path)
+        records.append(dict(input=uri, source_uri=uri, source_name=source_name(uri),
+                            source_file_id=str(sid), event_start=2*i, event_stop=2*i+2,
+                            events=2, jets=4))
+    output = tmp_path / 'ten.root'
+    assert merge(inputs, output, source_records=records) == {'events': 20, 'jets': 40}
+    with uproot.open(output) as root:
+        assert str(root[SCHEMA]) == '2'
+        assert root[EVENTS]['source_file_id'].interpretation.numpy_dtype == np.dtype('uint64')
+        assert root[JETS]['event_idx'].interpretation.numpy_dtype == np.dtype('uint64')
+        assert ak.to_list(root[JETS]['event_idx'].array()) == [
+            idx for i in range(10) for idx in (2*i, 2*i, 2*i, 2*i+1)]
+        assert source_inputs(root) == records
+        assert str(root['vrslim/MergeInputs']) == '\n'.join(x['input'] for x in records)
+        source_values = ak.to_numpy(root[EVENTS]['source_file_id'].array())
+        for record in records:
+            assert np.all(source_values[record['event_start']:record['event_stop']] ==
+                          np.uint64(int(record['source_file_id'])))

@@ -79,14 +79,16 @@ verbatim once. This avoids round-off changes from reconstructing them later.
 Every repeated shared value is compared bitwise by the writer; a disagreement
 aborts production rather than silently replacing a value.
 
-`source_file_id` is the first 64 bits of SHA-256 over the MiniAOD basename. For
-names such as `miniv2_14998563-1760.root`, the cluster/task pair therefore
-remains stable when the file moves between storage locations. Duplicate
-basenames in one production group are rejected. This distinguishes independent
-private-MC files that reuse the
-same run/lumi/event numbers. The final ROOT embeds `vrslim/SourceInputs`, a
-valid JSON mapping from every source ID to its original MiniAOD name, event
-range and counts. The sidecar manifest contains the same mapping.
+`source_file_id` is the first 64 bits of SHA-256 over the full MiniAOD
+logical path. For CMS `/store/...` inputs, the complete /store path is hashed;
+redirector hosts, query and fragment do not affect the ID. Different directories
+with the same basename have different IDs. All original source and association
+checks are retained. Independent private-MC inputs can reuse run/lumi/event
+numbers; merging concatenates them with event_idx rebasing and never deduplicates
+by those numbers. The existing schema-2 SourceInputs mapping and sidecar keys are
+unchanged; no source_idx, source_key or source_id_scheme fields are added.
+Old output IDs are not rewritten. Newly produced IDs use the full-path hash;
+the uint64 field type and ROOT/sidecar formats remain the same.
 
 `vrslim/VRslimSchema` records version 2 and `vrslim/VRslimConfig` is valid JSON
 containing radii, named thresholds, global tag, sample/generator flags and a
@@ -206,3 +208,8 @@ python3 -m pytest -q Ntupler/test/test_vrslim_io.py
 
 These synthetic tests validate ROOT I/O and merging but do not replace compiling
 and running the CMSSW producer with real MiniAOD inputs.
+
+
+The existing large-file workaround registers SourceInputs, MergeInputs and both
+TTrees before writing baskets. It retains the same schema and provenance fields
+while avoiding uproot 5.3.11 directory-key expansion after the 2 GiB boundary.

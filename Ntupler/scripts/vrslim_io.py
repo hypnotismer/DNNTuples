@@ -233,6 +233,20 @@ def merge(inputs, output, step_size=1024, source_records=None):
                         expected, config, schema_version = current, current_config, current_version
                         out[SCHEMA] = schema_version
                         out[CONFIG] = config
+                        # Register every directory key before writing baskets.
+                        # uproot 5.3.11 can relocate a directory's key list past
+                        # 2 GiB without upgrading its small TKey addresses.
+                        # Late SourceInputs/MergeInputs writes then overflow.
+                        if source_records is not None:
+                            if schema_version != '2' or len(source_records) != len(inputs):
+                                raise ValueError('source_records requires one schema-2 record per merge input')
+                            out[SOURCE_INPUTS] = json.dumps(
+                                source_records, ensure_ascii=False, sort_keys=True,
+                                separators=(',', ':'))
+                            merge_names = [x['input'] for x in source_records]
+                        else:
+                            merge_names = list(map(str, inputs))
+                        out['vrslim/MergeInputs'] = '\n'.join(merge_names)
                         for path in (EVENTS, JETS):
                             out.mktree(path, expected[path])
                     elif current != expected or current_config != config or current_version != schema_version:
@@ -243,15 +257,6 @@ def merge(inputs, output, step_size=1024, source_records=None):
                                 chunk['event_idx'] = chunk['event_idx'] + np.uint64(event_offset)
                             out[path].extend(chunk)
                     event_offset += root[EVENTS].num_entries
-            if source_records is not None:
-                if schema_version != '2' or len(source_records) != len(inputs):
-                    raise ValueError('source_records requires one schema-2 record per merge input')
-                out[SOURCE_INPUTS] = json.dumps(source_records, ensure_ascii=False,
-                                                sort_keys=True, separators=(',', ':'))
-                merge_names = [x['input'] for x in source_records]
-            else:
-                merge_names = list(map(str, inputs))
-            out['vrslim/MergeInputs'] = '\n'.join(merge_names)
         counts = validate(temporary, step_size)
         # Atomic no-clobber publication on the destination filesystem.
         os.link(temporary, dest)

@@ -40,8 +40,11 @@ def source_name(source):
 
 
 def stable_source_id(source):
-    """Return a reproducible uint64 identity for one MiniAOD basename."""
-    digest = hashlib.sha256(source_name(source).encode('utf-8')).digest()
+    """Return a reproducible uint64 identity for one full MiniAOD logical path."""
+    path = source.split('#', 1)[0].split('?', 1)[0]
+    if '/store/' in path:
+        path = path[path.index('/store/'):]
+    digest = hashlib.sha256(path.encode('utf-8')).digest()
     # struct.unpack is available in both Python 2.7 and Python 3 and gives the
     # same big-endian uint64 definition as int.from_bytes(..., 'big').
     return struct.unpack('>Q', digest[:8])[0]
