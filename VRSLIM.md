@@ -213,3 +213,16 @@ and running the CMSSW producer with real MiniAOD inputs.
 The existing large-file workaround registers SourceInputs, MergeInputs and both
 TTrees before writing baskets. It retains the same schema and provenance fields
 while avoiding uproot 5.3.11 directory-key expansion after the 2 GiB boundary.
+
+### QCD input-event segments
+
+QCD production now requires a positive `maxEvents`; unbounded QCD cmsRun is
+rejected. Use the producer's `prepare_qcd_vrslim.sh` to count MiniAOD Events and
+prepare contiguous `skipEvents`/`maxEvents` ranges (default 10,000 input events).
+Each job reconstructs all configured radii. `run_vrslim.py` rejects negative
+skip values, invalid max values, duplicate range arguments and ranges applied
+to multiple inputs. Segmented output sidecars include `input_event_range`.
+The original source ID and ROOT schema remain unchanged; output `event_idx`
+is local to each segment. Input range offsets are not output event offsets.
+Workers clone the dev-UL-VRslim branch from GitHub. Local framework changes
+must be committed and pushed to that branch before new workers can use them.

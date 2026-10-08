@@ -34,6 +34,11 @@ options.parseArguments()
 radii = parse_radii(options.jetRadii)
 validate_thresholds(options.genJetPtMin, options.jetPreselectionPtMin, options.jetPtMin)
 description = ' '.join([options.inputDataset] + list(options.inputFiles))
+if options.skipEvents < 0 or options.maxEvents == 0 or options.maxEvents < -1:
+    raise ValueError('Invalid input event range')
+if 'QCD_' in description and options.maxEvents == -1:
+    raise ValueError('VRslim QCD must use bounded event segments: set skipEvents and maxEvents; '
+                     'prepare the Condor queue with prepare_qcd_vrslim.sh')
 if len(options.inputFiles) != 1:
     raise ValueError('VRslim schema 2 requires exactly one MiniAOD per cmsRun; use run_vrslim.py to combine inputs')
 if options.sourceFileId == 'auto':

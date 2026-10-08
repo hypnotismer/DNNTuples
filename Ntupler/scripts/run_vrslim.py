@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 
 from vrslim_io import merge, validate
+from vrslim_chunks import input_range
 try:
     from DeepNTuples.Ntupler.vrslim_config import source_name, stable_source_id
 except ImportError:
@@ -32,6 +33,13 @@ def main():
     for value in args.cmsrun_args:
         if value.split('=', 1)[0] in {'inputFiles', 'outputFile', 'writeReference', 'sourceFileId'}:
             parser.error('Driver manages inputFiles/outputFile/writeReference/sourceFileId')
+    try:
+        requested_range = input_range(args.cmsrun_args)
+    except ValueError as error:
+        parser.error(str(error))
+    is_split = requested_range != {'skipEvents': 0, 'maxEvents': -1}
+    if is_split and len(inputs) != 1:
+        parser.error('An event range requires exactly one MiniAOD input')
     resolved_inputs = []
     for source in inputs:
         if source.startswith('file:') and not source.startswith('file:/'):
@@ -93,8 +101,10 @@ def main():
     # Manifest preserves original input provenance; do not rely on MC event IDs
     # being unique across separate generated samples.
     with manifest.open('x') as stream:
-        json.dump({'inputs': source_records, 'cmsrun_args': args.cmsrun_args,
-                   'counts': counts}, stream, indent=2)
+        payload = {'inputs': source_records, 'cmsrun_args': args.cmsrun_args, 'counts': counts}
+        if is_split:
+            payload['input_event_range'] = requested_range
+        json.dump(payload, stream, indent=2)
     print(counts)
 
 
