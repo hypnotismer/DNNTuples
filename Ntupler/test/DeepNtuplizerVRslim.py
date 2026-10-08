@@ -13,6 +13,8 @@ except NameError:
     integer_type = int
 
 options = VarParsing('analysis')
+# The driver owns the exact output path, including for bounded event segments.
+options.setType('outputFile', VarParsing.varType.string)
 options.outputFile = 'output.root'
 options.maxEvents = -1
 for name, default, kind, description in [

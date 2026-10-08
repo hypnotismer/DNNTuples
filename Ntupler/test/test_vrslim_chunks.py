@@ -64,3 +64,21 @@ def test_driver_rejects_range_for_multiple_files(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         run_vrslim.main()
     assert not (tmp_path / 'bad.root').exists()
+
+
+@pytest.mark.parametrize('max_events', [4000, 10000, -1])
+def test_actual_cmssw_varparsing_preserves_driver_output(max_events, monkeypatch):
+    # Execute the real config's options block with the real CMSSW 10_6 parser.
+    import ast
+    from FWCore.ParameterSet.VarParsing import VarParsing
+    path = Path(__file__).with_name('DeepNtuplizerVRslim.py')
+    source = path.read_text()
+    block = source[source.index("options = VarParsing('analysis')"):
+                   source.index('radii = parse_radii')]
+    monkeypatch.setattr(sys, 'argv', ['cmsRun', str(path),
+                                    'outputFile=/tmp/raw0.root',
+                                    'maxEvents=' + str(max_events)])
+    namespace = {'VarParsing': VarParsing}
+    exec(compile(ast.parse(block), str(path), 'exec'), namespace)
+    assert namespace['options'].outputFile == '/tmp/raw0.root'
+    assert namespace['options'].maxEvents == max_events
